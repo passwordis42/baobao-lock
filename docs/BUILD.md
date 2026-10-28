@@ -1,6 +1,6 @@
 # 构建 Windows 安装包
 
-宝宝锁 v0.1.1 用 Electron 做界面（直接沿用 `docs/design/v0/` 的挂件、设置、托盘菜单和 toast），主进程通过 [koffi](https://koffi.dev/) 调用 `SetWindowsHookExW(WH_KEYBOARD_LL)` 拦截键盘。不锁鼠标。安装包是 NSIS，文件名 `Baobao-Lock-Setup-0.1.1.exe`。
+宝宝锁 v0.1.2 用 Electron 做界面（直接沿用 `docs/design/v0/` 的挂件、设置、托盘菜单和 toast），主进程通过 [koffi](https://koffi.dev/) 调用 `SetWindowsHookExW(WH_KEYBOARD_LL)` 拦截键盘。不锁鼠标。安装包是 NSIS，文件名 `Baobao-Lock-Setup-0.1.2.exe`。
 
 只支持 64 位 Windows 10 / 11。默认 **不以管理员身份** 运行（清单 `asInvoker`，安装到当前用户目录）。
 
@@ -17,7 +17,7 @@ npm run dist
 产物：
 
 ```text
-release/Baobao-Lock-Setup-0.1.1.exe
+release/Baobao-Lock-Setup-0.1.2.exe
 ```
 
 安装后的程序名是 `BaobaoLock.exe`，开始菜单和桌面快捷方式显示「宝宝锁」。安装结束可选择立刻打开；打开后停在托盘，**不会上锁**。不会写入开机启动项。
@@ -55,7 +55,7 @@ npm run icons
 
 钩子回调必须在按键交给其他程序之前同步返回。安装时会用一个不会打到文本里的探测键（F23）确认这一点；探测失败同样视为没锁上。
 
-v0.1.1 上，这条探测经常失败（`probe-not-sync`）：钩子句柄可能已经拿到，但 F23 没有在按键交给其他程序之前被同步看到，所以上锁不会进入已上锁。这是当前开放问题，以管理员再运行一次也不能写成已修好。状态以仓库首页 [已知问题](../README.md#known-issues) 为准。
+低级键盘钩子只在安装它的那条线程正在 `PeekMessage` / `GetMessage` 时才会被调用。0.1.1 在同一条线程里同步调用 `keybd_event`，函数一返回就读标志，回调还没跑，自检总是失败（`probe-not-sync`），然后把钩子卸掉。0.1.2 把测试按键改到别的线程注入，安装线程在这段时间里泵消息。钩子真的拦到测试键才算装上；拦不到仍然明确说键盘没有锁住，不会假装已上锁。以管理员再运行一次不是这条的修法。状态以仓库首页 [已知问题](../README.md#known-issues) 为准。
 
 对话框里的「详情」分两种：`SetWindowsHookExW 失败（系统错误码 …）` 是 Windows 的返回值；`程序内部错误，不是权限不足：…` 是脚本异常。0.1.0 里第二次安装钩子会把 `kernel32` 弄丢，详情变成 `Cannot read properties of undefined (reading 'func')`。那是内部错误，键盘并没有锁上。0.1.1 会把已加载的 `user32` / `kernel32` 缓存下来再返回。
 
