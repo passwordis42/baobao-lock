@@ -33,6 +33,8 @@ test('windows hook is keyboard-only and boot does not auto-lock', function () {
   assert.match(read('src/renderer/toast.html'), /哎呀，还锁着哦/);
   assert.match(read('src/renderer/settings.html'), /Ctrl\+Alt\+Del 无法拦截/);
   assert.match(read('src/renderer/settings.html'), /开机不会自动上锁/);
+  assert.match(read('src/renderer/settings.html'), /长按上锁/);
+  assert.match(read('src/renderer/settings.html'), /单键按住约 3 秒；默认主键盘减号/);
   assert.match(read('src/renderer/settings.html'), /鼠标照常用/);
   assert.match(read('package.json'), /Baobao-Lock-Setup-\$\{version\}/);
   assert.match(read('package.json'), /"version": "1\.0\.0"/);

@@ -37,6 +37,28 @@ function hotkeyMatches(hotkey, mods, keyName) {
   return hotkey.key === keyName && sameModifiers(hotkey, mods);
 }
 
+/**
+ * Single key held to lock. Not a chord: modifiers are rejected, and Esc stays
+ * reserved for the emergency hold. Numpad minus (SUBTRACT) is a different key
+ * from the main-keyboard OEM_MINUS.
+ */
+function validateHoldKey(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: '请使用支持的按键。' };
+  if (input.ctrl || input.alt || input.shift || input.win) {
+    return { ok: false, error: '长按上锁只能设一个键，不要带 Ctrl、Alt、Shift 或 Win。' };
+  }
+  if (typeof input.key !== 'string' || !Object.prototype.hasOwnProperty.call(VK, input.key)) {
+    return { ok: false, error: '请使用支持的按键。' };
+  }
+  if (MODIFIER_NAMES.has(input.key)) {
+    return { ok: false, error: '长按上锁要一个普通键，不能是 Ctrl、Alt、Shift 或 Win。' };
+  }
+  if (input.key === 'ESCAPE') {
+    return { ok: false, error: 'Esc 留给紧急解锁（长按 3 秒），不能设成快捷键。' };
+  }
+  return { ok: true, hotkey: { key: input.key } };
+}
+
 function validateHotkey(input) {
   const hotkey = normalizeHotkey(input);
   if (!hotkey) return { ok: false, error: '请使用支持的按键。' };
@@ -82,6 +104,7 @@ module.exports = {
   hotkeyEquals,
   hotkeyMatches,
   validateHotkey,
+  validateHoldKey,
   isWrongUnlockAttempt,
   describeHotkey
 };

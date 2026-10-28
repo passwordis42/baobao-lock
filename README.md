@@ -62,7 +62,7 @@
 | 会做 | 不做 |
 | --- | --- |
 | 拦住键盘，包括 Alt+Tab、Win 键 | 不锁鼠标 / 触控板，不全屏 |
-| 默认 `Ctrl+Alt+K` 上锁、`Ctrl+Alt+L` 解锁，设置里可改 | 不写开机启动；打开后停在托盘，不会自动上锁 |
+| 默认长按主键盘 `-` 约 3 秒上锁，设置里可改；`Ctrl+Alt+K` 仍可上锁，`Ctrl+Alt+L` 解锁，也可改 | 不写开机启动；打开后停在托盘，不会自动上锁 |
 | 长按 `Esc` 满 3 秒紧急解锁 | 不和专注守卫、日历或其他软件联动；没有家长密码 |
 | 上锁时右下角可拖小挂件，可跨屏，位置会记住 | 没有 macOS、Linux、手机版 |
 | 托盘菜单；可改键、关提示音、挂件置顶 | `Ctrl+Alt+Del` 在系统安全桌面，拦不住 |
@@ -102,13 +102,13 @@
 | 动作 | 默认 |
 | --- | --- |
 | 打开菜单 | 左键或右键托盘图标。未上锁薄荷绿，已上锁粉色，钩子没生效会写「钩子未生效」 |
-| 上锁 | `Ctrl+Alt+K`（设置里可改） |
+| 上锁 | 长按主键盘 `-` 约 3 秒（设置里可改），或 `Ctrl+Alt+K`。松手不足 3 秒不上锁。短按仍输入 `-`。小键盘减号不算 |
 | 解锁 | `Ctrl+Alt+L`，或长按 `Esc` 满 3 秒（挂件上是黄色进度环） |
 | 上锁之后 | 键盘（含 Alt+Tab、Win）被拦住。鼠标可以拖挂件，位置会记住，也能拖到另一块屏幕 |
 | 解锁组合按错 | 「哎呀，还锁着哦」，不抢焦点。提示音可以关掉 |
 | 系统退路 | `Ctrl+Alt+Del` 拦不住 |
 
-改键时，`Esc` 留给紧急解锁，不能设成快捷键。`Ctrl+Alt+Del` 也不能设成快捷键。
+改键时，`Esc` 留给紧急解锁，不能设成上锁、解锁或长按上锁。长按上锁只能设一个键，默认是主键盘减号。`Ctrl+Alt+Del` 也不能设成快捷键。
 
 ## 界面
 
@@ -190,7 +190,7 @@ Baobao Lock (宝宝锁) is a small Windows tool for meetings and live streams. I
 | | |
 | --- | --- |
 | Name | 宝宝锁. Process `BaobaoLock.exe`. Character 锁宝 (original). |
-| Lock | Swallows keys, including Alt+Tab and the Windows key. Default `Ctrl+Alt+K`. |
+| Lock | Swallows keys, including Alt+Tab and the Windows key. Default: hold the main-keyboard `-` (not the numpad minus) for about 3 seconds; change that key in Settings. `Ctrl+Alt+K` still locks. A short press still types `-`. |
 | Unlock | `Ctrl+Alt+L`, or hold `Esc` for 3 seconds. |
 | Widget | A small draggable corner character while locked. None when unlocked. |
 | Out of scope | No mouse/trackpad lock, no fullscreen cover, no parental password, no macOS or phone build, no login item, no `Ctrl+Alt+Del` block. |
@@ -209,13 +209,13 @@ Electron UI. A native thread installs `SetWindowsHookExW(WH_KEYBOARD_LL)` and ru
 <details>
 <summary>繁體中文</summary>
 
-開會或直播時只鎖鍵盤，避免小孩亂按；滑鼠與觸控板仍可用。畫面文字是簡體中文。目前發布是 **v1.0.0**，正式第一版。
+開會或直播時只鎖鍵盤，避免小孩亂按；滑鼠與觸控板仍可用。畫面文字是簡體中文。預設長按主鍵盤減號 `-` 約 3 秒上鎖，設定可改，`Ctrl+Alt+K` 仍可上鎖。目前發布是 **v1.0.0**，正式第一版。
 
 </details>
 
 <details>
 <summary>日本語</summary>
 
-会議や配信のあいだ、キーボードだけをロックして、子どもの誤操作を防ぎます。マウスとトラックパッドはそのまま使えます。画面の文言は簡体字中国語です。現在のリリースは **v1.0.0** で、正式な第一版です。
+会議や配信のあいだ、キーボードだけをロックして、子どもの誤操作を防ぎます。マウスとトラックパッドはそのまま使えます。画面の文言は簡体字中国語です。初期設定ではメインキーボードの `-` を約 3 秒長押しするとロックします。設定で変更でき、`Ctrl+Alt+K` も使えます。現在のリリースは **v1.0.0** で、正式な第一版です。
 
 </details>

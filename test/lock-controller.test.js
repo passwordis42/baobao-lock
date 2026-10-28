@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { VK } = require('../src/shared/keys');
-const { createLockController, EMERGENCY_MS } = require('../src/shared/lock-controller');
+const { createLockController, EMERGENCY_MS, HOLD_LOCK_MS } = require('../src/shared/lock-controller');
 const { canPresentLocked } = require('../src/shared/messages');
 
 function down(controller, name, now) {
@@ -216,6 +216,95 @@ test('a dead hook force-unlocks instead of leaving a fake lock', function () {
   assert.equal(actions[0].type, 'force-unlocked');
   assert.equal(controller.getState().locked, false);
   assert.equal(canPresentLocked(controller.getState()), false);
+});
+
+test('holding the main-keyboard minus for 3 seconds locks without swallowing a short press', function () {
+  const controller = createLockController();
+  controller.setHookActive(true);
+  const started = down(controller, 'OEM_MINUS', 1000);
+  assert.equal(started.swallow, false);
+  assert.equal(started.actions[0].type, 'hold-lock');
+  assert.equal(controller.getState().locked, false);
+  assert.equal(controller.needsTick(), true);
+  const repeat = down(controller, 'OEM_MINUS', 1000 + 400);
+  assert.equal(repeat.swallow, false);
+  assert.equal(repeat.actions.length, 0);
+  assert.equal(controller.tick(1000 + HOLD_LOCK_MS - 1), null);
+  assert.equal(controller.getState().locked, false);
+  const done = controller.tick(1000 + HOLD_LOCK_MS);
+  assert.equal(done.type, 'locked');
+  assert.equal(done.via, 'hold');
+  assert.equal(controller.getState().locked, true);
+  assert.equal(controller.needsTick(), false);
+  assert.equal(up(controller, 'OEM_MINUS').swallow, true);
+  assert.equal(down(controller, 'A').swallow, true);
+  assert.equal(canPresentLocked(controller.getState()), true);
+
+  controller.requestUnlock();
+  down(controller, 'OEM_MINUS', 8000);
+  const early = up(controller, 'OEM_MINUS');
+  assert.equal(early.swallow, false);
+  assert.equal(early.actions[0].type, 'hold-cancel');
+  assert.equal(controller.tick(8000 + HOLD_LOCK_MS), null);
+  assert.equal(controller.getState().locked, false);
+  assert.equal(down(controller, 'B').swallow, false);
+});
+
+test('numpad minus and shifted minus do not start the hold lock', function () {
+  const controller = createLockController();
+  controller.setHookActive(true);
+  const numpad = down(controller, 'SUBTRACT', 100);
+  assert.equal(numpad.swallow, false);
+  assert.equal(numpad.actions.length, 0);
+  assert.equal(controller.tick(100 + HOLD_LOCK_MS), null);
+  up(controller, 'SUBTRACT');
+
+  down(controller, 'LSHIFT', 200);
+  const shifted = down(controller, 'OEM_MINUS', 200);
+  assert.equal(shifted.actions.some(function (action) { return action.type === 'hold-lock'; }), false);
+  assert.equal(controller.tick(200 + HOLD_LOCK_MS), null);
+  assert.equal(controller.getState().locked, false);
+});
+
+test('remapped hold key locks, and Ctrl+Alt+K still locks immediately', function () {
+  const controller = createLockController();
+  controller.setHookActive(true);
+  controller.updateSettings({ holdLockKey: { key: 'F8' } });
+  down(controller, 'OEM_MINUS', 10);
+  assert.equal(controller.tick(10 + HOLD_LOCK_MS), null);
+  up(controller, 'OEM_MINUS');
+  down(controller, 'F8', 50);
+  assert.equal(controller.tick(50 + HOLD_LOCK_MS).via, 'hold');
+  assert.equal(controller.getState().locked, true);
+  controller.requestUnlock();
+
+  const chord = pressChord(controller, ['LCONTROL', 'LMENU'], 'K', 9000);
+  assert.equal(chord.swallow, true);
+  assert.equal(chord.actions.some(function (action) { return action.type === 'locked' && action.via === 'hotkey'; }), true);
+});
+
+test('hold lock stays honest when the hook is not active', function () {
+  const controller = createLockController();
+  const started = down(controller, 'OEM_MINUS', 1000);
+  assert.equal(started.swallow, false);
+  const failed = controller.tick(1000 + HOLD_LOCK_MS);
+  assert.equal(failed.type, 'hook-missing');
+  assert.equal(controller.getState().locked, false);
+  assert.equal(canPresentLocked(controller.getState()), false);
+  assert.equal(up(controller, 'OEM_MINUS').swallow, false);
+});
+
+test('capture for hold lock accepts one key and does not lock', function () {
+  const controller = createLockController();
+  controller.setHookActive(true);
+  controller.setCapture('hold');
+  const captured = down(controller, 'J');
+  assert.equal(captured.swallow, true);
+  assert.equal(captured.actions[0].type, 'capture');
+  assert.equal(captured.actions[0].target, 'hold');
+  assert.equal(captured.actions[0].hotkey.key, 'J');
+  assert.equal(captured.actions[0].hotkey.ctrl, false);
+  assert.equal(controller.getState().locked, false);
 });
 
 test('tray unlock clears an in-progress emergency hold', function () {

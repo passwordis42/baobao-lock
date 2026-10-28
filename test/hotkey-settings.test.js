@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { formatSpaced, formatCompact, formatHold } = require('../src/shared/format');
-const { validateHotkey } = require('../src/shared/hotkey');
+const { validateHotkey, validateHoldKey } = require('../src/shared/hotkey');
 const {
   defaultSettings,
   sanitizeSettings,
@@ -22,6 +22,8 @@ test('formats hotkeys and the emergency counter like the mocks', function () {
   const unlock = defaultSettings().unlockHotkey;
   assert.equal(formatSpaced(lock), 'Ctrl + Alt + K');
   assert.equal(formatCompact(unlock), 'Ctrl+Alt+L');
+  assert.equal(formatSpaced(defaultSettings().holdLockKey), '-');
+  assert.equal(formatSpaced({ key: 'SUBTRACT' }), 'Num-');
   assert.equal(formatHold(1800), '1.8 / 3 秒');
   assert.equal(formatHold(0), '0.0 / 3 秒');
   assert.equal(formatHold(3000), '3.0 / 3 秒');
@@ -33,6 +35,19 @@ test('rejects unsafe or incomplete hotkeys', function () {
   assert.equal(validateHotkey({ win: true, key: 'L' }).ok, false);
   assert.equal(validateHotkey({ ctrl: true, alt: true, key: 'DELETE' }).ok, false);
   assert.equal(validateHotkey({ ctrl: true, shift: true, key: 'F8' }).ok, true);
+  assert.equal(validateHoldKey({ key: 'OEM_MINUS' }).ok, true);
+  assert.equal(validateHoldKey({ key: 'ESCAPE' }).ok, false);
+  assert.equal(validateHoldKey({ ctrl: true, key: 'K' }).ok, false);
+  assert.equal(validateHoldKey({ key: 'SUBTRACT' }).hotkey.key, 'SUBTRACT');
+  const hold = validateSettingsDraft({
+    lockHotkey: { ctrl: true, alt: true, key: 'K' },
+    unlockHotkey: { ctrl: true, alt: true, key: 'L' },
+    holdLockKey: { key: 'F8' },
+    tipSound: true,
+    alwaysOnTop: true
+  });
+  assert.equal(hold.ok, true);
+  assert.equal(hold.settings.holdLockKey.key, 'F8');
   const same = validateSettingsDraft({
     lockHotkey: { ctrl: true, alt: true, key: 'K' },
     unlockHotkey: { ctrl: true, alt: true, key: 'K' },
@@ -56,6 +71,7 @@ test('settings file cannot restore a lock or login auto-start', function () {
   assert.equal(clean.tipSound, false);
   assert.equal(clean.alwaysOnTop, false);
   assert.deepEqual(clean.widgetPosition, { x: 10, y: 20 });
+  assert.equal(clean.holdLockKey.key, 'OEM_MINUS');
   assert.equal(clean.locked, undefined);
   assert.equal(clean.openAtLogin, undefined);
   assert.equal(JSON.stringify(clean).includes('openAtLogin'), false);

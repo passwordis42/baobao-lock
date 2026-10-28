@@ -3,6 +3,7 @@
 var draft = {
   lockHotkey: { ctrl: true, alt: true, shift: false, win: false, key: 'K' },
   unlockHotkey: { ctrl: true, alt: true, shift: false, win: false, key: 'L' },
+  holdLockKey: { key: 'OEM_MINUS' },
   tipSound: true,
   alwaysOnTop: true
 };
@@ -12,6 +13,7 @@ var captureWhich = null;
 
 var lockBtn = document.getElementById('lockBtn');
 var unlockBtn = document.getElementById('unlockBtn');
+var holdBtn = document.getElementById('holdBtn');
 var tipBtn = document.getElementById('tipSound');
 var topBtn = document.getElementById('alwaysOnTop');
 var errorEl = document.getElementById('error');
@@ -20,7 +22,7 @@ var banner = document.getElementById('banner');
 function paintHotkey(button, hotkey, which) {
   if (captureWhich === which) {
     button.classList.add('capturing');
-    button.textContent = '请按组合键…';
+    button.textContent = which === 'hold' ? '请按一个键…' : '请按组合键…';
     return;
   }
   button.classList.remove('capturing');
@@ -38,6 +40,7 @@ function paintToggle(button, on) {
 function render() {
   paintHotkey(lockBtn, draft.lockHotkey, 'lock');
   paintHotkey(unlockBtn, draft.unlockHotkey, 'unlock');
+  paintHotkey(holdBtn, draft.holdLockKey, 'hold');
   paintToggle(tipBtn, draft.tipSound);
   paintToggle(topBtn, draft.alwaysOnTop);
   if (hookActive === false && hookAwaiting) {
@@ -65,6 +68,7 @@ function applyData(data) {
   if (!data) return;
   draft.lockHotkey = data.lockHotkey;
   draft.unlockHotkey = data.unlockHotkey;
+  draft.holdLockKey = data.holdLockKey || { key: 'OEM_MINUS' };
   draft.tipSound = !!data.tipSound;
   draft.alwaysOnTop = data.alwaysOnTop !== false;
   hookActive = data.hookActive !== false;
@@ -90,6 +94,7 @@ function begin(which) {
 
 lockBtn.addEventListener('click', function () { begin('lock'); });
 unlockBtn.addEventListener('click', function () { begin('unlock'); });
+holdBtn.addEventListener('click', function () { begin('hold'); });
 tipBtn.addEventListener('click', function () {
   draft.tipSound = !draft.tipSound;
   render();
@@ -113,6 +118,7 @@ document.getElementById('saveBtn').addEventListener('click', function () {
   window.baobao.saveSettings({
     lockHotkey: draft.lockHotkey,
     unlockHotkey: draft.unlockHotkey,
+    holdLockKey: draft.holdLockKey,
     tipSound: draft.tipSound,
     alwaysOnTop: draft.alwaysOnTop
   }).then(function (result) {
@@ -138,6 +144,7 @@ if (params.has('preview')) {
     }
     if (payload.target === 'lock') draft.lockHotkey = payload.hotkey;
     if (payload.target === 'unlock') draft.unlockHotkey = payload.hotkey;
+    if (payload.target === 'hold') draft.holdLockKey = payload.hotkey;
     showError('');
     render();
   });

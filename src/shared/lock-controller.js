@@ -5,6 +5,7 @@ const { hotkeyMatches, isWrongUnlockAttempt } = require('./hotkey');
 const { sanitizeSettings } = require('./settings-store');
 
 const EMERGENCY_MS = 3000;
+const HOLD_LOCK_MS = 3000;
 
 function modsFromHeld(held) {
   const has = function (name) { return held.has(VK[name]); };
@@ -22,10 +23,18 @@ function createLockController(options) {
   let locked = false;
   let capture = null;
   let escSince = null;
+  let holdSince = null;
+  let holdVk = null;
   const held = new Set();
   const swallowedDown = new Set();
 
+  function clearHold() {
+    holdSince = null;
+    holdVk = null;
+  }
+
   function engage(via) {
+    clearHold();
     if (!hookActive) {
       return { ok: false, actions: [{ type: 'hook-missing' }] };
     }
@@ -38,10 +47,21 @@ function createLockController(options) {
   }
 
   function release(via) {
+    clearHold();
     if (!locked) return { actions: [] };
     locked = false;
     escSince = null;
     return { actions: [{ type: 'unlocked', via: via }] };
+  }
+
+  function bareKey(mods) {
+    return !(mods.ctrl || mods.alt || mods.shift || mods.win);
+  }
+
+  function isHoldKey(name, mods) {
+    const hold = settings.holdLockKey;
+    if (!hold || !name || isModifierName(name)) return false;
+    return name === hold.key && bareKey(mods);
   }
 
   function onDown(vk, now) {
@@ -82,6 +102,20 @@ function createLockController(options) {
         swallowedDown.add(vk);
         return { swallow: true, actions: actions };
       }
+    } else if (capturing === 'hold' && !isModifierName(name)) {
+      const hotkey = {
+        ctrl: !!mods.ctrl,
+        alt: !!mods.alt,
+        shift: !!mods.shift,
+        win: !!mods.win,
+        key: name
+      };
+      capture = null;
+      swallowedDown.add(vk);
+      return {
+        swallow: true,
+        actions: [{ type: 'capture', target: 'hold', hotkey: hotkey }]
+      };
     } else if (capturing && !isModifierName(name) && (mods.ctrl || mods.alt || mods.shift || mods.win)) {
       const hotkey = {
         ctrl: mods.ctrl,
@@ -100,10 +134,20 @@ function createLockController(options) {
     }
 
     if (!locked) {
+      if (holdVk != null && vk !== holdVk) {
+        clearHold();
+        actions.push({ type: 'hold-cancel' });
+      }
       if (!isModifierName(name) && hotkeyMatches(settings.lockHotkey, mods, name)) {
         const engaged = engage('hotkey');
         swallowedDown.add(vk);
-        return { swallow: true, actions: engaged.actions };
+        return { swallow: true, actions: actions.concat(engaged.actions) };
+      }
+      if (!capturing && isHoldKey(name, mods)) {
+        holdSince = now;
+        holdVk = vk;
+        actions.push({ type: 'hold-lock', elapsed: 0 });
+        return { swallow: false, actions: actions };
       }
       return { swallow: false, actions: actions };
     }
@@ -131,6 +175,10 @@ function createLockController(options) {
       escSince = null;
       if (locked) actions.push({ type: 'emergency-cancel' });
     }
+    if (vk === holdVk && holdSince != null) {
+      clearHold();
+      actions.push({ type: 'hold-cancel' });
+    }
     const swallow = swallowedDown.has(vk);
     swallowedDown.delete(vk);
     return { swallow: swallow, actions: actions };
@@ -138,6 +186,7 @@ function createLockController(options) {
 
   return {
     EMERGENCY_MS: EMERGENCY_MS,
+    HOLD_LOCK_MS: HOLD_LOCK_MS,
 
     event(input) {
       const vk = typeof input.vk === 'bigint' ? Number(input.vk) : Number(input.vk);
@@ -148,14 +197,27 @@ function createLockController(options) {
     },
 
     tick(now) {
-      if (!locked || escSince == null) return null;
-      const elapsed = now - escSince;
-      if (elapsed >= EMERGENCY_MS) {
-        locked = false;
-        escSince = null;
-        return { type: 'unlocked', via: 'emergency', progress: 1, elapsed: EMERGENCY_MS };
+      if (locked && escSince != null) {
+        const elapsed = now - escSince;
+        if (elapsed >= EMERGENCY_MS) {
+          locked = false;
+          escSince = null;
+          clearHold();
+          return { type: 'unlocked', via: 'emergency', progress: 1, elapsed: EMERGENCY_MS };
+        }
+        return { type: 'emergency', progress: elapsed / EMERGENCY_MS, elapsed: elapsed };
       }
-      return { type: 'emergency', progress: elapsed / EMERGENCY_MS, elapsed: elapsed };
+      if (!locked && holdSince != null && now - holdSince >= HOLD_LOCK_MS) {
+        const vk = holdVk;
+        const engaged = engage('hold');
+        if (engaged.ok && locked && vk != null) swallowedDown.add(vk);
+        return engaged.actions[0] || null;
+      }
+      return null;
+    },
+
+    needsTick() {
+      return (locked && escSince != null) || (!locked && holdSince != null);
     },
 
     emergencyView(now) {
@@ -178,20 +240,29 @@ function createLockController(options) {
       if (hookActive && !next && locked) {
         locked = false;
         escSince = null;
+        clearHold();
         capture = null;
         actions.push({ type: 'force-unlocked', reason: 'hook-lost' });
       }
       hookActive = next;
-      if (!hookActive) capture = null;
+      if (!hookActive) {
+        capture = null;
+        clearHold();
+      }
       return actions;
     },
 
     setCapture(which) {
-      if (which === 'lock' || which === 'unlock' || which === null) capture = which;
+      if (which === 'lock' || which === 'unlock' || which === 'hold' || which === null) {
+        capture = which;
+        if (which) clearHold();
+      }
     },
 
     updateSettings(next) {
+      const previous = settings.holdLockKey && settings.holdLockKey.key;
       settings = sanitizeSettings(Object.assign({}, settings, next || {}));
+      if (!settings.holdLockKey || settings.holdLockKey.key !== previous) clearHold();
     },
 
     getState() {
@@ -200,9 +271,11 @@ function createLockController(options) {
         hookActive: hookActive,
         capture: capture,
         emergency: escSince == null ? null : { startedAt: escSince },
+        hold: holdSince == null ? null : { startedAt: holdSince },
         settings: {
           lockHotkey: Object.assign({}, settings.lockHotkey),
           unlockHotkey: Object.assign({}, settings.unlockHotkey),
+          holdLockKey: Object.assign({}, settings.holdLockKey),
           tipSound: settings.tipSound,
           alwaysOnTop: settings.alwaysOnTop,
           widgetPosition: settings.widgetPosition ? Object.assign({}, settings.widgetPosition) : null
@@ -214,5 +287,6 @@ function createLockController(options) {
 
 module.exports = {
   EMERGENCY_MS,
+  HOLD_LOCK_MS,
   createLockController
 };
