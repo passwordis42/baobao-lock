@@ -306,7 +306,7 @@ test('v0.1.3 hook path is a real GetMessage thread, not the koffi pump', functio
   assert.match(native, /SetWindowsHookExW\(WH_KEYBOARD_LL/);
   assert.equal(native.includes('WH_MOUSE'), false);
   assert.match(pkg, /hook_thread\.node/);
-  assert.match(pkg, /"version": "0\.1\.3"/);
+  assert.match(pkg, /"version": "1\.0\.0"/);
   assert.match(pkg, /asInvoker/);
   assert.deepEqual(HMOD_ORDER, ['addon', 'null', 'exe']);
 });
