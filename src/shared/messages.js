@@ -4,6 +4,18 @@
  * Copy shown when the keyboard hook is not actually swallowing keys.
  * The wording must say the keyboard is NOT locked.
  */
+
+/** JS exception while installing the hook. Not a Win32 access-denied code. */
+function describeHookException(err) {
+  const message = err && err.message ? String(err.message) : String(err || '');
+  return '程序内部错误，不是权限不足：' + message;
+}
+
+/** SetWindowsHookExW returned NULL. `code` is GetLastError. */
+function describeWin32HookFailure(code) {
+  return 'SetWindowsHookExW 失败（系统错误码 ' + code + '）。这是 Windows 返回的结果，不是脚本异常。';
+}
+
 function hookFailureMessage(result) {
   const detail = result && result.detail ? String(result.detail) : '';
   const lines = [
@@ -41,6 +53,8 @@ function canPresentLocked(state) {
 
 module.exports = {
   hookFailureMessage,
+  describeHookException,
+  describeWin32HookFailure,
   trayStatus,
   trayTooltip,
   canPresentLocked
