@@ -3,28 +3,32 @@
 /**
  * Low-level keyboard hook (WH_KEYBOARD_LL = 13).
  *
- * The hook callback runs on this process's UI thread. It must decide to
- * swallow the key before returning — if the callback were deferred to a later
- * turn of the event loop, the key would already have been delivered and a
- * locked widget would be a lie. install() sends a probe key and only reports
- * success when that key is observed inside the callback before keybd_event
- * returns.
+ * Windows calls the hook on the thread that installed it, and only while that
+ * thread is inside PeekMessage / GetMessage / MsgWaitForMultipleObjects.
+ * Electron pumps those messages when the main loop is idle, so a real key can
+ * be swallowed before another program sees it.
+ *
+ * The install self-test used to call keybd_event on this same thread and read
+ * a flag as soon as it returned. The callback had not run yet, so the flag
+ * stayed false, install() removed a hook that would have worked, and the
+ * keyboard never locked (probe-not-sync). The test key is now injected with
+ * keybd_event.async (a worker thread) while this thread pumps. Success means
+ * the hook observed that key. If it does not, the keyboard is not locked.
  *
  * Mouse / trackpad are never hooked.
  */
 
 const koffi = require('koffi');
 const { createApiLoader } = require('./api-loader');
+const { pumpUntil, PM_NOREMOVE, QS_ALLINPUT, PROBE_PUMP_MS } = require('./message-pump');
 const { describeHookException, describeWin32HookFailure } = require('../shared/messages');
-const { PROBE_EXTRA, isProbeExtra } = require('../shared/probe');
+const { isProbeEvent, runInstalledProbe } = require('../shared/probe');
 
 const WH_KEYBOARD_LL = 13;
 const WM_KEYDOWN = 0x0100;
 const WM_KEYUP = 0x0101;
 const WM_SYSKEYDOWN = 0x0104;
 const WM_SYSKEYUP = 0x0105;
-const KEYEVENTF_KEYUP = 0x0002;
-const PROBE_VK = 0x86; // F23, not a real keyboard key on typical hardware
 
 const KBDLLHOOKSTRUCT = koffi.struct('KBDLLHOOKSTRUCT', {
   vkCode: 'uint32',
@@ -52,11 +56,16 @@ function createWinHook(options) {
   let UnhookWindowsHookEx = null;
   let GetLastError = null;
   let keybd_event = null;
+  let PeekMessageW = null;
+  let MsgWaitForMultipleObjects = null;
+  let Sleep = null;
   let bound = false;
   let hHook = null;
   let callback = null;
   let active = false;
+  let probing = false;
   let probeSeen = false;
+  const probeMsg = Buffer.alloc(64);
   const loadLibs = createApiLoader(function (name) { return koffi.load(name); });
 
   function loadApi() {
@@ -72,7 +81,14 @@ function createWinHook(options) {
     keybd_event = libs.user32.func(
       'void __stdcall keybd_event(uint8 bVk, uint8 bScan, uint32 dwFlags, uintptr_t dwExtraInfo)'
     );
+    PeekMessageW = libs.user32.func(
+      'int __stdcall PeekMessageW(void *lpMsg, void *hWnd, uint32 wMsgFilterMin, uint32 wMsgFilterMax, uint32 wRemoveMsg)'
+    );
+    MsgWaitForMultipleObjects = libs.user32.func(
+      'uint32 __stdcall MsgWaitForMultipleObjects(uint32 nCount, void *pHandles, int fWaitAll, uint32 dwMilliseconds, uint32 dwWakeMask)'
+    );
     GetLastError = libs.kernel32.func('uint32 __stdcall GetLastError()');
+    Sleep = libs.kernel32.func('void __stdcall Sleep(uint32 dwMilliseconds)');
     bound = true;
     return libs.kernel32;
   }
@@ -83,7 +99,7 @@ function createWinHook(options) {
         return CallNextHookEx(hHook, nCode, wParam, lParam);
       }
       const kb = koffi.decode(lParam, KBDLLHOOKSTRUCT);
-      if (isProbeExtra(kb.dwExtraInfo)) {
+      if (isProbeEvent(kb, probing)) {
         probeSeen = true;
         return 1;
       }
@@ -136,23 +152,44 @@ function createWinHook(options) {
     return { handle: handle, error: 0 };
   }
 
+  function injectAsync(vk, scan, flags, extra) {
+    keybd_event.async(vk, scan, flags, extra, function (err) {
+      if (!err) return;
+      try { onError(err); } catch (ignore) { /* probe result is what the user sees */ }
+    });
+  }
+
+  function pumpProbe(pred) {
+    return pumpUntil(pred, PROBE_PUMP_MS, {
+      peek() { PeekMessageW(probeMsg, null, 0, 0, PM_NOREMOVE); },
+      wait(ms) { MsgWaitForMultipleObjects(0, null, 0, ms, QS_ALLINPUT); },
+      sleep(ms) { Sleep(ms); }
+    });
+  }
+
   function probe() {
-    if (!hHook || !keybd_event) {
+    if (!hHook || !keybd_event || !PeekMessageW || !MsgWaitForMultipleObjects || !Sleep) {
       return { ok: false, code: 'probe-no-hook', detail: '钩子句柄无效。' };
     }
-    probeSeen = false;
-    keybd_event(PROBE_VK, 0, 0, PROBE_EXTRA);
-    const sawDown = probeSeen;
-    probeSeen = false;
-    keybd_event(PROBE_VK, 0, KEYEVENTF_KEYUP, PROBE_EXTRA);
-    if (!sawDown) {
-      return {
-        ok: false,
-        code: 'probe-not-sync',
-        detail: '钩子没有在按键到达其他程序之前同步拦住测试按键，因此不能用来上锁。'
-      };
+    // PeekMessage can deliver the hook (and other sent messages) before it
+    // returns. A nested probe must not uninstall the hook still under test.
+    if (probing) return { ok: true };
+    probing = true;
+    try {
+      return runInstalledProbe(
+        {
+          get hHook() { return hHook; },
+          get probeSeen() { return probeSeen; },
+          set probeSeen(value) { probeSeen = !!value; }
+        },
+        {
+          inject: injectAsync,
+          pump: pumpProbe
+        }
+      );
+    } finally {
+      probing = false;
     }
-    return { ok: true };
   }
 
   function install() {

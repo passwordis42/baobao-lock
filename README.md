@@ -2,9 +2,7 @@
 
 开会或直播时，把键盘暂时锁住，免得小孩凑过来乱按。鼠标和触控板照常使用。
 
-界面是简体中文。当前发布是 **v0.1.1**。
-
-> **v0.1.1 还不能用来上锁。** 安装钩子之后，F23 探测经常不能在按键交给其他程序之前被同步看到（`probe-not-sync`）。热键和托盘里的「上锁」不会进入已上锁。请先看 [已知问题](#known-issues)。修复目标是 **0.1.2**。
+界面是简体中文。当前发布是 **v0.1.2**。
 
 <a id="intro"></a>
 
@@ -56,15 +54,15 @@ You lock and unlock it yourself. It does not lock on startup, and it is not conn
 | Out of scope | No mouse/trackpad lock, no fullscreen cover, no parental password, no macOS or phone build, no `Ctrl+Alt+Del` block. |
 | Honest failure | If the keyboard hook is not actually swallowing keys, the app says so and does not show a locked state. |
 
-**v0.1.1 cannot lock the keyboard.** See [Known issues](#known-issues).
+Current release: **v0.1.2**. `probe-not-sync` from v0.1.1 is fixed; see [Known issues](#known-issues).
 
 ### 繁體中文（短述）
 
-開會或直播時只鎖鍵盤，避免小孩亂按；滑鼠與觸控板仍可用。畫面文字是簡體中文。**v0.1.1 還不能上鎖**，請先看[已知問題](#known-issues)。
+開會或直播時只鎖鍵盤，避免小孩亂按；滑鼠與觸控板仍可用。畫面文字是簡體中文。目前發布是 **v0.1.2**。v0.1.1 的 `probe-not-sync` 已修好，見[已知問題](#known-issues)。
 
 ### 日本語（短述）
 
-会議や配信のあいだ、キーボードだけをロックして、子どもの誤操作を防ぎます。マウスとトラックパッドはそのまま使えます。画面の文言は簡体字中国語です。**v0.1.1 ではロックできません。** [既知の問題](#known-issues)を先に見てください。
+会議や配信のあいだ、キーボードだけをロックして、子どもの誤操作を防ぎます。マウスとトラックパッドはそのまま使えます。画面の文言は簡体字中国語です。現在のリリースは **v0.1.2** です。v0.1.1 の `probe-not-sync` は修正済みです。[既知の問題](#known-issues)を参照してください。
 
 <a id="download"></a>
 
@@ -74,8 +72,8 @@ You lock and unlock it yourself. It does not lock on startup, and it is not conn
 
 | | |
 | --- | --- |
-| 最新标签 | **[v0.1.1](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.1)**（2026-10-28：能安装，**不能上锁**） |
-| 这一版的安装包 | [Baobao-Lock-Setup-0.1.1.exe](https://github.com/passwordis42/baobao-lock/releases/download/v0.1.1/Baobao-Lock-Setup-0.1.1.exe) |
+| 最新标签 | **[v0.1.2](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.2)**（2026-10-28：修复 v0.1.1 的 `probe-not-sync`） |
+| 这一版的安装包 | [Baobao-Lock-Setup-0.1.2.exe](https://github.com/passwordis42/baobao-lock/releases/download/v0.1.2/Baobao-Lock-Setup-0.1.2.exe) |
 | 以后的版本 | [Releases](https://github.com/passwordis42/baobao-lock/releases)（文件名一般是 `Baobao-Lock-Setup-x.y.z.exe`） |
 
 安装包没有代码签名。Windows SmartScreen 可能提示「未知发布者」。这是未签名安装包的常见提示，不代表锁已经生效。
@@ -87,7 +85,7 @@ You lock and unlock it yourself. It does not lock on startup, and it is not conn
 ## 已知问题 / Known issues
 
 状态日期：**2026-10-28**（Asia/Shanghai）  
-最新 Release：**v0.1.1**。这一版**不能用来上锁**。
+最新 Release：**[v0.1.2](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.2)**。
 
 发版时只改这一节，按下面五步对一下事实：
 
@@ -99,27 +97,22 @@ You lock and unlock it yourself. It does not lock on startup, and it is not conn
 
 ### 当前开放 / Open
 
-| ID | 版本 | 现象 | 下一步 |
-| --- | --- | --- | --- |
-| `probe-not-sync` | **v0.1.1（当前）** | 钩子句柄有时能装上，但安装时发出的 F23 探测键不能在 `keybd_event` 返回之前、于钩子回调里被同步看到。程序因此**不上锁**，并弹出对话框，标题「键盘钩子未生效」，正文「键盘现在没有锁住」，详情说明探测键没有被同步拦住。热键 `Ctrl+Alt+K` 和托盘「上锁」都不会进入已上锁，看起来像没有反应。 | 修复进行中，目标 **0.1.2**，分支 `fix/windows-hook-probe-sync`。0.1.2 发布前，不要把 v0.1.1 当成能用的上锁工具。 |
-
-v0.1.1 上以管理员身份再运行一次，**不能**把上面这条写成已修好。钩子失败时程序仍会建议可以试一次管理员运行；那是通用提示，不是这条 bug 的修复。
-
-**English.** On v0.1.1 the low-level hook may be installed, but the F23 install probe is not observed synchronously inside the hook callback before other apps can see the key (`probe-not-sync`). Lock never starts. The app shows 「键盘钩子未生效 / 键盘现在没有锁住」 and does not pretend the keyboard is locked. Hotkeys and the tray lock action therefore look like they do nothing. A fix is in progress toward 0.1.2 on `fix/windows-hook-probe-sync`. Do not treat v0.1.1 as a working lock.
+无。
 
 ### 已修复 / Fixed
 
 | ID | 出现 | 修复于 | 说明 |
 | --- | --- | --- | --- |
+| `probe-not-sync` | v0.1.1 | **v0.1.2** | 低级键盘钩子只在安装线程泵消息时才会回调。0.1.1 在同一线程同步调用 `keybd_event` 后立刻读标志，回调还没跑，自检失败并卸掉钩子。热键和托盘「上锁」因此没有反应，对话框标题「键盘钩子未生效」，正文「键盘现在没有锁住」。0.1.2 改为在别的线程注入 F23，安装线程泵到钩子看见测试键才算装上。看不见仍然不上锁，也不会假装已经锁住。以管理员再运行一次不是这条的修法。 |
 | `loadApi` 第二次安装返回 `undefined` | v0.1.0 | **v0.1.1** | 再次安装钩子时，已加载的 `kernel32` 被弄丢，`loadApi` 第二次返回 `undefined`，详情变成 `Cannot read properties of undefined (reading 'func')`。这是程序内部错误，键盘当时也没有锁上。0.1.1 改为把已加载的 `user32` / `kernel32` 缓存下来再返回。 |
 
-**English.** v0.1.0: a second hook install dropped the cached `kernel32`, so `loadApi` returned `undefined` and the dialog showed `reading 'func'`. Fixed in v0.1.1. That release still cannot lock, because of `probe-not-sync` above.
+**English.** v0.1.1 `probe-not-sync`: the F23 probe ran on the hook thread and read the flag before Windows could deliver the low-level callback, so a working hook was removed and lock never started. Fixed in v0.1.2 by injecting the probe from another thread while the installing thread pumps messages. If the probe is still not seen, the app still refuses to fake a lock. Running as administrator was not the fix. v0.1.0 `loadApi`: a second hook install dropped the cached `kernel32` (`reading 'func'`). Fixed in v0.1.1.
 
 <a id="usage"></a>
 
 ## 怎么用 / Usage
 
-先看 [已知问题](#known-issues)。在 `probe-not-sync` 修好之前，下面的「上锁」不会进入已上锁。
+钩子没真正生效时不会进入已上锁，见 [已知问题](#known-issues)。
 
 | 动作 | 默认操作 |
 | --- | --- |
@@ -132,7 +125,7 @@ v0.1.1 上以管理员身份再运行一次，**不能**把上面这条写成已
 
 改键时，`Esc` 留给紧急解锁，不能设成快捷键。`Ctrl+Alt+Del` 也不能设成快捷键。
 
-**English.** Tray: mint when unlocked, pink when locked. Lock `Ctrl+Alt+K`, unlock `Ctrl+Alt+L` or hold Esc for 3 seconds. A wrong unlock chord shows the toast 「哎呀，还锁着哦」. On v0.1.1 these lock actions do not enter the locked state; see Known issues.
+**English.** Tray: mint when unlocked, pink when locked. Lock `Ctrl+Alt+K`, unlock `Ctrl+Alt+L` or hold Esc for 3 seconds. A wrong unlock chord shows the toast 「哎呀，还锁着哦」. If the hook is not actually swallowing keys, lock does not start; see Known issues.
 
 <a id="ui"></a>
 
@@ -170,7 +163,7 @@ v0.1.1 上以管理员身份再运行一次，**不能**把上面这条写成已
 
 界面是 Electron。真正拦键盘的是主进程：用 [koffi](https://koffi.dev/) 调用 `SetWindowsHookExW(WH_KEYBOARD_LL)`。不挂鼠标钩子。
 
-钩子回调必须在这一次按键交给其他程序之前就决定吞不吞。如果把决定推迟到之后的事件循环，键已经送出去了，再画一个「已上锁」就是假的。所以每次安装钩子都会发一个平时打不出字的探测键（F23）。只有回调在 `keybd_event` 返回之前看到这下探测，才算装上。看不到就卸掉钩子，并弹出「键盘钩子未生效 / 键盘现在没有锁住」。v0.1.1 卡在这一步，见 [已知问题](#known-issues) 的 `probe-not-sync`。
+钩子回调必须在这一次按键交给其他程序之前就决定吞不吞。如果把决定推迟到之后的事件循环，键已经送出去了，再画一个「已上锁」就是假的。所以每次安装钩子都会发一个平时打不出字的探测键（F23）。低级钩子只在安装它的线程正在泵消息时才会被调用，因此探测键在别的线程注入，安装线程泵到回调看见这下探测，才算装上。看不到就卸掉钩子，并弹出「键盘钩子未生效 / 键盘现在没有锁住」。0.1.1 在同一线程里同步探测，回调来不及跑（`probe-not-sync`），已在 0.1.2 修好，见 [已知问题](#known-issues)。
 
 权限是 `asInvoker`：默认不用管理员，安装到当前用户目录。失败时可以再试一次「以管理员身份运行」，但程序不会把失败显示成已上锁。
 
@@ -178,7 +171,7 @@ v0.1.1 上以管理员身份再运行一次，**不能**把上面这条写成已
 
 更细的打包和钩子说明在 [docs/BUILD.md](docs/BUILD.md)，产品边界在 [docs/PRD.md](docs/PRD.md)。
 
-**English.** Electron UI. The main process installs a low-level keyboard hook with koffi and `SetWindowsHookExW(WH_KEYBOARD_LL)`, then checks with an F23 probe that the callback saw the key synchronously. The manifest is `asInvoker` (no admin by default). Failure stays an error dialog, never a fake lock. Not linked to Focus Guard. Depth: [docs/BUILD.md](docs/BUILD.md), [docs/PRD.md](docs/PRD.md).
+**English.** Electron UI. The main process installs a low-level keyboard hook with koffi and `SetWindowsHookExW(WH_KEYBOARD_LL)`. The F23 probe is injected on another thread while the installing thread pumps messages, so the callback can see the key before it reaches other apps. v0.1.1 probed on the hook thread and always failed. The manifest is `asInvoker` (no admin by default). Failure stays an error dialog, never a fake lock. Not linked to Focus Guard. Depth: [docs/BUILD.md](docs/BUILD.md), [docs/PRD.md](docs/PRD.md).
 
 <a id="build"></a>
 
