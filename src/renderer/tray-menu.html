@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>宝宝锁</title>
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="tray-menu.css" />
+</head>
+<body class="app">
+  <nav class="menu" aria-label="宝宝锁托盘菜单">
+    <div class="menu-head">
+      <img id="statusIcon" src="../assets/icon-locked.svg" width="22" height="22" alt="" />
+      <div>
+        <strong>宝宝锁</strong>
+        <span id="statusLine" class="locked">● 已上锁</span>
+      </div>
+    </div>
+    <button class="item primary" type="button" data-action="lock">
+      <span class="ico" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 7V5a3 3 0 0 1 5.8-1" stroke="#5ECF9A" stroke-width="1.6" stroke-linecap="round"/><rect x="3.5" y="7" width="9" height="7" rx="2" fill="#5ECF9A"/><circle cx="8" cy="10" r="1.1" fill="#fff"/></svg>
+      </span>
+      上锁
+      <span class="shortcut" id="lockShortcut">Ctrl+Alt+K</span>
+    </button>
+    <button class="item unlock" type="button" data-action="unlock">
+      <span class="ico" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 7V5a3 3 0 1 1 6 0v2" stroke="#FF6B95" stroke-width="1.6" stroke-linecap="round"/><rect x="3.5" y="7" width="9" height="7" rx="2" fill="#FF6B95"/><circle cx="8" cy="10" r="1.1" fill="#fff"/></svg>
+      </span>
+      解锁
+      <span class="shortcut" id="unlockShortcut">Ctrl+Alt+L</span>
+    </button>
+    <button class="item" type="button" data-action="settings">
+      <span class="ico" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="2.2" stroke="#8B7355" stroke-width="1.4"/>
+          <path d="M8 2.5v1.4M8 12.1v1.4M2.5 8h1.4M12.1 8h1.4M4.1 4.1l1 1M10.9 10.9l1 1M11.9 4.1l-1 1M5.1 10.9l-1 1" stroke="#8B7355" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </span>
+      打开设置
+    </button>
+    <div class="sep"></div>
+    <button class="item danger" type="button" data-action="exit">
+      <span class="ico" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4L4 12" stroke="#B85A5A" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </span>
+      退出
+    </button>
+  </nav>
+  <script src="tray-menu.js"></script>
+</body>
+</html>

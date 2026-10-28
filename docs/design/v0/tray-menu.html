@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>宝宝锁 · 托盘菜单</title>
+<style>
+  :root {
+    --cream: #FFF8F0;
+    --pink: #FFB4C8;
+    --pink-deep: #FF6B95;
+    --mint: #A8E6CF;
+    --mint-deep: #5ECF9A;
+    --text: #5C4A3A;
+    --text-muted: #8B7355;
+    --line: #F0E4D8;
+    --shadow: 0 10px 28px rgba(92, 61, 74, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 40px 48px 56px;
+    background:
+      linear-gradient(160deg, #DCE8F5 0%, #E8EEF5 40%, #F5F0EB 100%);
+    font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+    color: var(--text);
+  }
+  .taskbar {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
+    background: rgba(32, 40, 52, 0.88);
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: 0 14px; gap: 10px;
+  }
+  .tray-icons { display: flex; align-items: center; gap: 8px; }
+  .tray-icons img { width: 18px; height: 18px; display: block; }
+  .clock { color: #E8EEF5; font-size: 11px; margin-left: 8px; }
+  .label {
+    position: absolute; left: 32px; top: 28px;
+    font-size: 12px; color: #7A8494;
+  }
+  .icons-row {
+    position: absolute; left: 32px; top: 56px;
+    display: flex; gap: 16px; align-items: center;
+    background: rgba(255,255,255,0.7);
+    border-radius: 12px; padding: 10px 14px;
+    border: 1px solid #E0E6EE;
+  }
+  .icons-row figure {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--text-muted);
+  }
+  .icons-row img { width: 32px; height: 32px; }
+  .menu {
+    width: 210px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    border: 1px solid #FFE0EA;
+    padding: 6px;
+    margin-bottom: 8px;
+  }
+  .menu-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 4px;
+  }
+  .menu-head img { width: 22px; height: 22px; }
+  .menu-head strong { font-size: 12px; display: block; }
+  .menu-head span { font-size: 10px; color: var(--pink-deep); font-weight: 600; }
+  .item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+  }
+  .item:hover { background: #FFF0F5; }
+  .item.primary { color: var(--mint-deep); }
+  .item.unlock { color: var(--pink-deep); }
+  .item.danger { color: #B85A5A; }
+  .item .ico {
+    width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  }
+  .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+  .shortcut {
+    margin-left: auto; font-size: 10px; font-weight: 500; color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+  <div class="label">系统托盘 · 右键菜单预览（锁态）</div>
+  <div class="icons-row">
+    <figure>
+      <img src="assets/icon-locked.svg" alt="锁态图标" />
+      <figcaption>锁态</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/icon-unlocked.svg" alt="开态图标" />
+      <figcaption>开态</figcaption>
+    </figure>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:flex-end;">
+    <nav class="menu" aria-label="宝宝锁托盘菜单">
+      <div class="menu-head">
+        <img src="assets/icon-locked.svg" alt="" />
+        <div>
+          <strong>宝宝锁</strong>
+          <span>● 已上锁</span>
+        </div>
+      </div>
+      <div class="item primary">
+        <span class="ico" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 7V5a3 3 0 0 1 5.8-1" stroke="#5ECF9A" stroke-width="1.6" stroke-linecap="round"/><rect x="3.5" y="7" width="9" height="7" rx="2" fill="#5ECF9A"/><circle cx="8" cy="10" r="1.1" fill="#fff"/></svg>
+        </span>
+        上锁
+        <span class="shortcut">Ctrl+Alt+K</span>
+      </div>
+      <div class="item unlock">
+        <span class="ico" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 7V5a3 3 0 1 1 6 0v2" stroke="#FF6B95" stroke-width="1.6" stroke-linecap="round"/><rect x="3.5" y="7" width="9" height="7" rx="2" fill="#FF6B95"/><circle cx="8" cy="10" r="1.1" fill="#fff"/></svg>
+        </span>
+        解锁
+        <span class="shortcut">Ctrl+Alt+L</span>
+      </div>
+      <div class="item">
+        <span class="ico" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="2.2" stroke="#8B7355" stroke-width="1.4"/>
+            <path d="M8 2.5v1.4M8 12.1v1.4M2.5 8h1.4M12.1 8h1.4M4.1 4.1l1 1M10.9 10.9l1 1M11.9 4.1l-1 1M5.1 10.9l-1 1" stroke="#8B7355" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </span>
+        打开设置
+      </div>
+      <div class="sep"></div>
+      <div class="item danger">
+        <span class="ico" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4L4 12" stroke="#B85A5A" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </span>
+        退出
+      </div>
+    </nav>
+  </div>
+
+  <div class="taskbar">
+    <div class="tray-icons">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="#C8D0DA" aria-hidden="true"><circle cx="8" cy="8" r="6"/></svg>
+      <img src="assets/icon-locked.svg" alt="宝宝锁托盘图标" title="宝宝锁 · 已上锁" />
+    </div>
+    <div class="clock">21:12</div>
+  </div>
+</body>
+</html>

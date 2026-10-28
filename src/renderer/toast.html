@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>宝宝锁</title>
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="toast.css" />
+</head>
+<body class="app">
+  <div class="stage">
+    <div class="toast" role="status" aria-live="polite">
+      <svg class="face" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="18" cy="18" r="16" fill="#FFE8A3"/>
+        <circle cx="13" cy="16" r="1.8" fill="#5C4A3A"/>
+        <circle cx="23" cy="16" r="1.8" fill="#5C4A3A"/>
+        <path d="M13 24 q5 -4 10 0" fill="none" stroke="#5C4A3A" stroke-width="1.6" stroke-linecap="round"/>
+        <ellipse cx="10" cy="20" rx="2.2" ry="1.4" fill="#FFB4C8" opacity="0.8"/>
+        <ellipse cx="26" cy="20" rx="2.2" ry="1.4" fill="#FFB4C8" opacity="0.8"/>
+      </svg>
+      <div class="txt">
+        <strong id="title">哎呀，还锁着哦</strong>
+        <span id="sub">请按 Ctrl+Alt+L 解锁</span>
+      </div>
+      <div class="sound" id="sound" aria-hidden="true" title="小声提示音"><i></i><i></i><i></i></div>
+    </div>
+  </div>
+  <script src="toast.js"></script>
+</body>
+</html>

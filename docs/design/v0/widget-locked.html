@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>宝宝锁 · 挂件 · 已上锁</title>
+<style>
+  :root {
+    --cream: #FFF8F0;
+    --pink: #FFB4C8;
+    --pink-deep: #FF6B95;
+    --mint: #A8E6CF;
+    --yellow: #FFE8A3;
+    --text: #5C4A3A;
+    --text-muted: #8B7355;
+    --shadow: 0 8px 24px rgba(92, 61, 74, 0.18);
+    --radius: 20px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 28px 36px;
+    background:
+      linear-gradient(135deg, #E8F4FF 0%, #FFF0F5 45%, #FFF8E7 100%);
+    font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+    color: var(--text);
+  }
+  .desk-hint {
+    position: absolute; left: 32px; top: 28px;
+    font-size: 12px; color: #9AA3B2; letter-spacing: 0.02em;
+  }
+  .widget {
+    width: 148px;
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 2px solid #FFE0EA;
+    padding: 14px 12px 12px;
+    text-align: center;
+    position: relative;
+    cursor: grab;
+  }
+  .widget::after {
+    content: "";
+    position: absolute; inset: -3px;
+    border-radius: 22px;
+    border: 1.5px dashed rgba(255, 107, 149, 0.25);
+    pointer-events: none;
+  }
+  .drag-dots {
+    display: flex; justify-content: center; gap: 3px; margin-bottom: 8px;
+  }
+  .drag-dots span {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: #E8C4D0;
+  }
+  .mascot {
+    width: 72px; height: 72px; margin: 0 auto 8px;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #FFE0EA;
+    color: var(--pink-deep);
+    font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px;
+    margin-bottom: 6px;
+  }
+  .badge .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--pink-deep);
+    box-shadow: 0 0 0 3px rgba(255, 107, 149, 0.25);
+  }
+  .hint {
+    font-size: 10px; color: var(--text-muted); line-height: 1.4;
+  }
+  .hint kbd {
+    font-family: inherit;
+    background: var(--cream);
+    border: 1px solid #F0DCC8;
+    border-radius: 4px;
+    padding: 0 4px;
+    font-size: 9px;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+  <div class="desk-hint">桌面预览 · 右下角挂件</div>
+  <div class="widget" title="拖动移动">
+    <div class="drag-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+    <svg class="mascot" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg" aria-label="锁宝 · 已上锁">
+      <!-- soft glow -->
+      <ellipse cx="36" cy="64" rx="22" ry="4" fill="rgba(255,107,149,0.18)"/>
+      <!-- shackle locked -->
+      <path d="M24 30 V22 a12 12 0 0 1 24 0 v8" fill="none" stroke="#C48A9A" stroke-width="5" stroke-linecap="round"/>
+      <path d="M24 30 V22 a12 12 0 0 1 24 0 v8" fill="none" stroke="#E8B4C4" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- body -->
+      <rect x="16" y="28" width="40" height="32" rx="14" fill="#FF6B95"/>
+      <rect x="18" y="30" width="36" height="28" rx="12" fill="#FF8AAB"/>
+      <!-- blush -->
+      <ellipse cx="24" cy="46" rx="4" ry="2.5" fill="#FFB4C8" opacity="0.9"/>
+      <ellipse cx="48" cy="46" rx="4" ry="2.5" fill="#FFB4C8" opacity="0.9"/>
+      <!-- eyes closed cute -->
+      <path d="M26 42 q3 -3 6 0" fill="none" stroke="#5C4A3A" stroke-width="2" stroke-linecap="round"/>
+      <path d="M40 42 q3 -3 6 0" fill="none" stroke="#5C4A3A" stroke-width="2" stroke-linecap="round"/>
+      <!-- smile -->
+      <path d="M32 50 q4 4 8 0" fill="none" stroke="#5C4A3A" stroke-width="1.8" stroke-linecap="round"/>
+      <!-- keyhole -->
+      <circle cx="36" cy="40" r="3.2" fill="#FFF8F0" opacity="0.95"/>
+      <rect x="34.6" y="41.5" width="2.8" height="5" rx="1.2" fill="#FFF8F0"/>
+    </svg>
+    <div class="badge"><span class="dot"></span>已上锁</div>
+    <div class="hint">按 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd><br/>解锁</div>
+  </div>
+</body>
+</html>

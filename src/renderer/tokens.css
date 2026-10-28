@@ -1,0 +1,40 @@
+:root {
+  --cream: #fff8f0;
+  --pink: #ffb4c8;
+  --pink-deep: #ff6b95;
+  --pink-soft: #ffe0ea;
+  --mint: #a8e6cf;
+  --mint-deep: #5ecf9a;
+  --yellow: #ffe8a3;
+  --yellow-deep: #f5c84c;
+  --text: #5c4a3a;
+  --text-muted: #8b7355;
+  --line: #f0e4d8;
+  --surface: #ffffff;
+  --shadow: 0 8px 24px rgba(92, 61, 74, 0.18);
+  --radius: 20px;
+  --radius-sm: 10px;
+  font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body.app {
+  background: transparent;
+  overflow: hidden;
+  height: 100vh;
+  user-select: none;
+}
+
+body.preview {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #e8f4ff 0%, #fff0f5 45%, #fff8e7 100%);
+}
+
+button, input { font-family: inherit; }

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>宝宝锁 · 按错提示</title>
+<style>
+  :root {
+    --cream: #FFF8F0;
+    --pink: #FFB4C8;
+    --pink-deep: #FF6B95;
+    --yellow: #FFE8A3;
+    --text: #5C4A3A;
+    --text-muted: #8B7355;
+    --shadow: 0 8px 24px rgba(92, 61, 74, 0.16);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 28px 36px 40px;
+    background:
+      linear-gradient(135deg, #E8F4FF 0%, #FFF0F5 45%, #FFF8E7 100%);
+    font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+    color: var(--text);
+  }
+  .desk-hint {
+    position: absolute; left: 32px; top: 28px;
+    font-size: 12px; color: #9AA3B2;
+  }
+  /* dimmed locked widget behind toast */
+  .widget {
+    width: 148px;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(92, 61, 74, 0.12);
+    border: 2px solid #FFE0EA;
+    padding: 14px 12px 12px;
+    text-align: center;
+    opacity: 0.55;
+    filter: saturate(0.85);
+  }
+  .mascot { width: 64px; height: 64px; margin: 0 auto 6px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #FFE0EA; color: var(--pink-deep);
+    font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .toast-wrap {
+    position: absolute;
+    right: 36px;
+    bottom: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+  }
+  .toast {
+    display: flex; align-items: center; gap: 10px;
+    background: #fff;
+    border-radius: 14px;
+    padding: 10px 14px 10px 10px;
+    box-shadow: var(--shadow);
+    border: 1.5px solid #FFE8A3;
+    max-width: 240px;
+    animation: pop 0.35s ease-out;
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+  }
+  .toast .face {
+    width: 36px; height: 36px; flex-shrink: 0;
+  }
+  .toast .txt strong {
+    display: block; font-size: 12px; font-weight: 800; color: #C48A20;
+  }
+  .toast .txt span {
+    font-size: 11px; color: var(--text-muted);
+  }
+  .sound {
+    display: flex; align-items: center; gap: 2px;
+    margin-left: 2px;
+  }
+  .sound i {
+    display: block; width: 3px; border-radius: 2px;
+    background: #F5C84C;
+    animation: eq 0.6s ease-in-out infinite alternate;
+  }
+  .sound i:nth-child(1) { height: 6px; animation-delay: 0s; }
+  .sound i:nth-child(2) { height: 10px; animation-delay: 0.1s; }
+  .sound i:nth-child(3) { height: 7px; animation-delay: 0.2s; }
+  @keyframes eq {
+    from { transform: scaleY(0.5); opacity: 0.6; }
+    to { transform: scaleY(1); opacity: 1; }
+  }
+  .note {
+    position: absolute; left: 32px; bottom: 32px;
+    font-size: 11px; color: #9AA3B2;
+  }
+</style>
+</head>
+<body>
+  <div class="desk-hint">上锁态 · 按错解锁组合 → 小声 toast（不抢焦点）</div>
+
+  <div class="toast-wrap">
+    <div class="toast" role="status" aria-live="polite">
+      <svg class="face" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="18" cy="18" r="16" fill="#FFE8A3"/>
+        <circle cx="13" cy="16" r="1.8" fill="#5C4A3A"/>
+        <circle cx="23" cy="16" r="1.8" fill="#5C4A3A"/>
+        <path d="M13 24 q5 -4 10 0" fill="none" stroke="#5C4A3A" stroke-width="1.6" stroke-linecap="round"/>
+        <ellipse cx="10" cy="20" rx="2.2" ry="1.4" fill="#FFB4C8" opacity="0.8"/>
+        <ellipse cx="26" cy="20" rx="2.2" ry="1.4" fill="#FFB4C8" opacity="0.8"/>
+      </svg>
+      <div class="txt">
+        <strong>哎呀，还锁着哦</strong>
+        <span>请按 Ctrl+Alt+L 解锁</span>
+      </div>
+      <div class="sound" aria-hidden="true" title="小声提示音"><i></i><i></i><i></i></div>
+    </div>
+  </div>
+
+  <div class="widget" aria-hidden="true">
+    <svg class="mascot" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <path d="M21 27 V20 a11 11 0 0 1 22 0 v7" fill="none" stroke="#C48A9A" stroke-width="4.5" stroke-linecap="round"/>
+      <rect x="14" y="25" width="36" height="28" rx="12" fill="#FF8AAB"/>
+      <path d="M23 38 q3 -2.5 6 0" fill="none" stroke="#5C4A3A" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M35 38 q3 -2.5 6 0" fill="none" stroke="#5C4A3A" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M28 45 q4 3 8 0" fill="none" stroke="#5C4A3A" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <div class="badge">已上锁</div>
+  </div>
+
+  <div class="note">短暂出现约 1.5–2 秒后自动消失 · 可在设置关闭提示音</div>
+</body>
+</html>
