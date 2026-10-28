@@ -266,7 +266,7 @@ test('give up after a missed probe and no real key is an honest failure', async 
   assert.match(failed.detail, /真实按键也没有进入回调/);
   assert.match(failed.detail, /procEntered=0/);
   assert.match(failed.detail, /lastFlags=0x0/);
-  assert.match(formatDiag(failed.diag), /v=0\.1\.3/);
+  assert.match(formatDiag(failed.diag), /v=1\.0\.0/);
   assert.equal(hook.isActive(), false);
   assert.equal(hook.isInstalled(), false);
   assert.equal(hook.isAwaitingProof(), false);
