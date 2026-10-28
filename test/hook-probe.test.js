@@ -266,7 +266,7 @@ test('give up after a missed probe and no real key is an honest failure', async 
   assert.match(failed.detail, /真实按键也没有进入回调/);
   assert.match(failed.detail, /procEntered=0/);
   assert.match(failed.detail, /lastFlags=0x0/);
-  assert.match(formatDiag(failed.diag), /v=0\.1\.3/);
+  assert.match(formatDiag(failed.diag), /v=1\.0\.0/);
   assert.equal(hook.isActive(), false);
   assert.equal(hook.isInstalled(), false);
   assert.equal(hook.isAwaitingProof(), false);
@@ -306,7 +306,7 @@ test('v0.1.3 hook path is a real GetMessage thread, not the koffi pump', functio
   assert.match(native, /SetWindowsHookExW\(WH_KEYBOARD_LL/);
   assert.equal(native.includes('WH_MOUSE'), false);
   assert.match(pkg, /hook_thread\.node/);
-  assert.match(pkg, /"version": "0\.1\.3"/);
+  assert.match(pkg, /"version": "1\.0\.0"/);
   assert.match(pkg, /asInvoker/);
   assert.deepEqual(HMOD_ORDER, ['addon', 'null', 'exe']);
 });

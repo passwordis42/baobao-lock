@@ -2,16 +2,18 @@
 
 const fs = require('fs');
 const path = require('path');
-const { hotkeyEquals, validateHotkey } = require('./hotkey');
+const { hotkeyEquals, validateHotkey, validateHoldKey } = require('./hotkey');
 
 const DEFAULT_LOCK = { ctrl: true, alt: true, shift: false, win: false, key: 'K' };
 const DEFAULT_UNLOCK = { ctrl: true, alt: true, shift: false, win: false, key: 'L' };
+const DEFAULT_HOLD_LOCK = { key: 'OEM_MINUS' };
 
 function defaultSettings() {
   return {
     version: 1,
     lockHotkey: Object.assign({}, DEFAULT_LOCK),
     unlockHotkey: Object.assign({}, DEFAULT_UNLOCK),
+    holdLockKey: Object.assign({}, DEFAULT_HOLD_LOCK),
     tipSound: true,
     alwaysOnTop: true,
     widgetPosition: null
@@ -46,10 +48,12 @@ function sanitizeSettings(raw) {
   const unlock = validateHotkey(raw.unlockHotkey);
   const lockHotkey = lock.ok ? lock.hotkey : defaults.lockHotkey;
   const unlockCandidate = unlock.ok ? unlock.hotkey : defaults.unlockHotkey;
+  const hold = validateHoldKey(raw.holdLockKey);
   return {
     version: 1,
     lockHotkey: lockHotkey,
     unlockHotkey: distinctUnlock(lockHotkey, unlockCandidate),
+    holdLockKey: hold.ok ? hold.hotkey : Object.assign({}, DEFAULT_HOLD_LOCK),
     tipSound: typeof raw.tipSound === 'boolean' ? raw.tipSound : true,
     alwaysOnTop: typeof raw.alwaysOnTop === 'boolean' ? raw.alwaysOnTop : true,
     widgetPosition: sanitizePosition(raw.widgetPosition)
@@ -64,11 +68,18 @@ function validateSettingsDraft(draft) {
   if (hotkeyEquals(lock.hotkey, unlock.hotkey)) {
     return { ok: false, error: '上锁和解锁不能用同一个组合键。' };
   }
+  let holdLockKey = Object.assign({}, DEFAULT_HOLD_LOCK);
+  if (draft && draft.holdLockKey != null) {
+    const hold = validateHoldKey(draft.holdLockKey);
+    if (!hold.ok) return { ok: false, error: hold.error };
+    holdLockKey = hold.hotkey;
+  }
   return {
     ok: true,
     settings: {
       lockHotkey: lock.hotkey,
       unlockHotkey: unlock.hotkey,
+      holdLockKey: holdLockKey,
       tipSound: !!(draft && draft.tipSound),
       alwaysOnTop: typeof (draft && draft.alwaysOnTop) === 'boolean' ? draft.alwaysOnTop : true
     }
@@ -119,6 +130,7 @@ function createSettingsStore(filePath) {
 module.exports = {
   DEFAULT_LOCK,
   DEFAULT_UNLOCK,
+  DEFAULT_HOLD_LOCK,
   defaultSettings,
   sanitizeSettings,
   validateSettingsDraft,

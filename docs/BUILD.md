@@ -1,6 +1,6 @@
 # 构建 Windows 安装包
 
-宝宝锁 v0.1.3 用 Electron 做界面（直接沿用 `docs/design/v0/` 的挂件、设置、托盘菜单和 toast），键盘钩子在独立原生线程里调用 `SetWindowsHookExW(WH_KEYBOARD_LL)` 并自己跑 `GetMessage`。不锁鼠标。安装包是 NSIS，文件名 `Baobao-Lock-Setup-0.1.3.exe`。
+宝宝锁 v1.0.0 用 Electron 做界面（直接沿用 `docs/design/v0/` 的挂件、设置、托盘菜单和 toast），键盘钩子在独立原生线程里调用 `SetWindowsHookExW(WH_KEYBOARD_LL)` 并自己跑 `GetMessage`。不锁鼠标。安装包是 NSIS，文件名 `Baobao-Lock-Setup-1.0.0.exe`。
 
 只支持 64 位 Windows 10 / 11。默认 **不以管理员身份** 运行（清单 `asInvoker`，安装到当前用户目录）。
 
@@ -17,7 +17,7 @@ npm run dist
 产物：
 
 ```text
-release/Baobao-Lock-Setup-0.1.3.exe
+release/Baobao-Lock-Setup-1.0.0.exe
 ```
 
 安装后的程序名是 `BaobaoLock.exe`，开始菜单和桌面快捷方式显示「宝宝锁」。安装结束可选择立刻打开；打开后停在托盘，**不会上锁**。不会写入开机启动项。

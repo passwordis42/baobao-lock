@@ -13,7 +13,7 @@ const { hookFailureMessage, trayStatus, trayTooltip, canPresentLocked } = requir
 
 const WIDGET_SIZE = { width: 224, height: 268 };
 const TOAST_SIZE = { width: 320, height: 120 };
-const SETTINGS_SIZE = { width: 412, height: 708 };
+const SETTINGS_SIZE = { width: 412, height: 770 };
 const MENU_SIZE = { width: 268, height: 320 };
 const TOAST_MS = 1800;
 const PROBE_MS = 15000;
@@ -41,7 +41,7 @@ let menuWin = null;
 let toastTimer = null;
 let toastVisible = false;
 let dialogOpen = false;
-let emergencyTimer = null;
+let tickTimer = null;
 let probeTimer = null;
 let proofTimer = null;
 let proofHint = false;
@@ -122,6 +122,7 @@ function settingsPayload() {
   return {
     lockHotkey: s.settings.lockHotkey,
     unlockHotkey: s.settings.unlockHotkey,
+    holdLockKey: s.settings.holdLockKey,
     tipSound: s.settings.tipSound,
     alwaysOnTop: s.settings.alwaysOnTop,
     hookActive: s.hookActive,
@@ -221,7 +222,7 @@ function hideLockedUi() {
   if (toastTimer) clearTimeout(toastTimer);
   if (toastWin && !toastWin.isDestroyed()) toastWin.hide();
   if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide();
-  stopEmergencyTimer();
+  stopTick();
   updateTray();
 }
 
@@ -460,13 +461,21 @@ function flush(actions) {
       return;
     }
     if (action.type === 'emergency') {
-      startEmergencyTimer();
+      ensureTick();
       send(widgetWin, 'widget-state', widgetPayload(action));
       return;
     }
     if (action.type === 'emergency-cancel') {
-      stopEmergencyTimer();
+      if (!controller.needsTick()) stopTick();
       send(widgetWin, 'widget-state', widgetPayload());
+      return;
+    }
+    if (action.type === 'hold-lock') {
+      ensureTick();
+      return;
+    }
+    if (action.type === 'hold-cancel') {
+      if (!controller.needsTick()) stopTick();
       return;
     }
     if (action.type === 'wrong-attempt') {
@@ -483,7 +492,9 @@ function flush(actions) {
       return;
     }
     if (action.type === 'capture') {
-      const check = validateHotkeySafe(action.hotkey);
+      const check = action.target === 'hold'
+        ? validateHoldKeySafe(action.hotkey)
+        : validateHotkeySafe(action.hotkey);
       send(settingsWin, 'hotkey-captured', {
         target: action.target,
         hotkey: check.hotkey || null,
@@ -508,6 +519,11 @@ function flush(actions) {
 function validateHotkeySafe(hotkey) {
   const { validateHotkey } = require('../shared/hotkey');
   return validateHotkey(hotkey);
+}
+
+function validateHoldKeySafe(hotkey) {
+  const { validateHoldKey } = require('../shared/hotkey');
+  return validateHoldKey(hotkey);
 }
 
 function schedule(actions) {
@@ -621,19 +637,19 @@ function doUnlock() {
   flush(res.actions);
 }
 
-function startEmergencyTimer() {
-  if (emergencyTimer) return;
-  emergencyTimer = setInterval(function () {
+function ensureTick() {
+  if (tickTimer) return;
+  tickTimer = setInterval(function () {
     const action = controller.tick(Date.now());
-    if (!action) return;
-    flush([action]);
+    if (action) flush([action]);
+    if (!controller.needsTick()) stopTick();
   }, 50);
 }
 
-function stopEmergencyTimer() {
-  if (!emergencyTimer) return;
-  clearInterval(emergencyTimer);
-  emergencyTimer = null;
+function stopTick() {
+  if (!tickTimer) return;
+  clearInterval(tickTimer);
+  tickTimer = null;
 }
 
 function startProbeWatch() {
@@ -692,7 +708,7 @@ function wireIpc() {
   });
 
   ipcMain.handle('capture-begin', function (_event, which) {
-    if (which !== 'lock' && which !== 'unlock') return { ok: false };
+    if (which !== 'lock' && which !== 'unlock' && which !== 'hold') return { ok: false };
     controller.setCapture(which);
     return { ok: true };
   });
@@ -803,7 +819,7 @@ if (gotInstance) {
     if (hook) hook.uninstall();
     if (probeTimer) clearInterval(probeTimer);
     if (proofTimer) clearTimeout(proofTimer);
-    stopEmergencyTimer();
+    stopTick();
   });
   app.on('window-all-closed', function () {
     /* tray app: keep running with no windows */
