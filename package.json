@@ -20,7 +20,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "electron": "33.4.11",
     "electron-builder": "25.1.8",
-    "node-gyp": "^10.2.0",
+    "node-gyp": "^12.4.0",
     "png-to-ico": "^2.1.8"
   },
   "build": {
