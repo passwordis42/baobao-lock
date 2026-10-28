@@ -10,87 +10,69 @@ const {
   PROBE_VK,
   KEYEVENTF_KEYUP,
   LLKHF_INJECTED,
+  LLKHF_LOWER_IL_INJECTED,
+  INPUT_SIZE,
+  HMOD_ORDER,
   PROBE_NOT_SYNC_DETAIL,
   isProbeEvent,
-  runInstalledProbe
+  writeKeyboardInputs,
+  summarizeAttempts,
+  formatDiag,
+  runYieldProbe
 } = require('../src/shared/probe');
-const { pumpUntil, PM_NOREMOVE, QS_ALLINPUT, PROBE_PUMP_MS } = require('../src/main/message-pump');
+const { trayStatus } = require('../src/shared/messages');
+const { createWinHook } = require('../src/main/hook-win');
 
-test('probe succeeds only when the hook runs while this thread pumps', function () {
-  const state = { hHook: 1, probeSeen: false };
-  const order = [];
-  const result = runInstalledProbe(state, {
-    inject(vk, scan, flags, extra) {
-      order.push('inject:' + flags);
-      assert.equal(vk, PROBE_VK);
-      assert.equal(scan, 0);
-      assert.equal(extra, PROBE_EXTRA);
-      assert.equal(state.probeSeen, false);
+function emptyProbe(over) {
+  return Object.assign({
+    proven: false,
+    probeSeen: false,
+    procEntered: 0,
+    procDelta: 0,
+    lastVk: 0,
+    lastFlags: 0,
+    lastExtra: '0',
+    sendInputCount: 0,
+    injectMethod: 'SendInput',
+    yields: 0,
+    pump: 'GetMessage',
+    elapsedMs: 4
+  }, over || {});
+}
+
+function scriptedBackend(ctrl) {
+  let handler = null;
+  return {
+    kind: 'fake',
+    nativeLoadError: ctrl.nativeLoadError || '',
+    setHandler(fn) { handler = fn; },
+    setLocked(locked) { ctrl.locked = !!locked; },
+    isAlive() { return ctrl.alive !== false; },
+    stats() {
+      return ctrl.stats || {
+        procEntered: 0,
+        probeSeen: false,
+        lastVk: 0,
+        lastFlags: 0,
+        lastExtra: '0',
+        pump: 'GetMessage'
+      };
     },
-    pump(pred) {
-      const before = !!pred();
-      order.push('pump-before:' + before);
-      if (!before && order.filter(function (item) { return item.startsWith('pump-before'); }).length === 1) {
-        state.probeSeen = true;
-      }
-      order.push('pump-after:' + !!pred());
-      return pred();
-    }
-  });
-  assert.equal(result.ok, true);
-  assert.deepEqual(order, [
-    'inject:0',
-    'pump-before:false',
-    'pump-after:true',
-    'inject:' + KEYEVENTF_KEYUP,
-    'pump-before:false',
-    'pump-after:false'
-  ]);
-});
-
-test('a same-thread inject that sets the flag before the pump still counts', function () {
-  const state = { hHook: 1, probeSeen: false };
-  let pumps = 0;
-  const result = runInstalledProbe(state, {
-    inject(_vk, _scan, flags) {
-      if (flags === 0) state.probeSeen = true;
+    start(kind) {
+      ctrl.events.push('start:' + kind);
+      const result = ctrl.onStart ? ctrl.onStart(kind) : { ok: true, lastError: 0, hMod: kind };
+      return Object.assign({ hMod: kind }, result);
     },
-    pump(pred) {
-      pumps += 1;
-      return pred();
-    }
-  });
-  assert.equal(result.ok, true);
-  assert.equal(pumps, 2);
-});
+    probe() {
+      ctrl.events.push('probe');
+      return ctrl.onProbe ? ctrl.onProbe() : emptyProbe({ proven: true, probeSeen: true, procEntered: 1, procDelta: 1 });
+    },
+    stop() { ctrl.events.push('stop'); },
+    emit(phase, vk) { return handler(phase, vk); }
+  };
+}
 
-test('probe stays honest when pumping never delivers the test key', function () {
-  const state = { hHook: 1, probeSeen: false };
-  let injects = 0;
-  const result = runInstalledProbe(state, {
-    inject() { injects += 1; },
-    pump() { return false; }
-  });
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'probe-not-sync');
-  assert.equal(result.detail, PROBE_NOT_SYNC_DETAIL);
-  assert.equal(result.detail, '钩子没有在按键到达其他程序之前同步拦住测试按键，因此不能用来上锁。');
-  assert.equal(injects, 2);
-});
-
-test('missing hook does not inject a probe key', function () {
-  let injects = 0;
-  const result = runInstalledProbe({ hHook: null, probeSeen: false }, {
-    inject() { injects += 1; },
-    pump() { throw new Error('should not pump'); }
-  });
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'probe-no-hook');
-  assert.match(result.detail, /钩子句柄无效/);
-  assert.equal(injects, 0);
-});
-
-test('probe event is the magic extra, or an injected F23 only while probing', function () {
+test('probe event is the magic extra, or the probe vk while a probe is in flight', function () {
   assert.equal(isProbeEvent({ dwExtraInfo: PROBE_EXTRA, vkCode: 0x41, flags: 0 }, false), true);
   assert.equal(isProbeEvent({ dwExtraInfo: BigInt(PROBE_EXTRA), vkCode: 1, flags: 0 }, false), true);
   assert.equal(isProbeEvent({
@@ -101,79 +83,230 @@ test('probe event is the magic extra, or an injected F23 only while probing', fu
   assert.equal(isProbeEvent({
     dwExtraInfo: 0,
     vkCode: PROBE_VK,
-    flags: LLKHF_INJECTED | 0x80
+    flags: LLKHF_LOWER_IL_INJECTED
   }, true), true);
+  assert.equal(isProbeEvent({ dwExtraInfo: 0, vkCode: PROBE_VK, flags: 0 }, true), true);
   assert.equal(isProbeEvent({
     dwExtraInfo: 0,
     vkCode: PROBE_VK,
     flags: LLKHF_INJECTED
   }, false), false);
-  assert.equal(isProbeEvent({ dwExtraInfo: 0, vkCode: PROBE_VK, flags: 0 }, true), false);
   assert.equal(isProbeEvent({ dwExtraInfo: 0, vkCode: 0x41, flags: LLKHF_INJECTED }, true), false);
   assert.equal(isProbeEvent(null, true), false);
+  assert.equal(PROBE_VK, 0xE8);
 });
 
-test('pump enters the kernel before giving up, and stops once the hook is seen', function () {
-  let seen = false;
+test('keyboard input buffer matches the x64 INPUT layout', function () {
+  const buf = writeKeyboardInputs(PROBE_VK, PROBE_EXTRA);
+  assert.equal(buf.length, INPUT_SIZE * 2);
+  assert.equal(buf.readUInt32LE(0), 1);
+  assert.equal(buf.readUInt16LE(8), PROBE_VK);
+  assert.equal(buf.readUInt32LE(12), 0);
+  assert.equal(buf.readBigUInt64LE(24), BigInt(PROBE_EXTRA));
+  assert.equal(buf.readUInt16LE(INPUT_SIZE + 8), PROBE_VK);
+  assert.equal(buf.readUInt32LE(INPUT_SIZE + 12), KEYEVENTF_KEYUP);
+  assert.equal(buf.readBigUInt64LE(INPUT_SIZE + 24), BigInt(PROBE_EXTRA));
+});
+
+test('yield probe waits for the event loop before accepting a miss', async function () {
   let waits = 0;
-  const immediate = pumpUntil(function () { return seen; }, 400, {
-    peek() { seen = true; },
-    wait() { waits += 1; },
-    sleep() { throw new Error('sleep after the hook was seen'); }
-  }, function () { return 0; });
-  assert.equal(immediate, true);
-  assert.equal(waits, 0);
-
-  let t = 0;
-  const calls = [];
-  const timedOut = pumpUntil(function () { return false; }, 40, {
-    peek() { calls.push('peek'); },
-    wait(ms) {
-      calls.push('wait:' + ms);
-      t += ms;
+  const state = { probeSeen: false, procEntered: 0, procAtStart: 0 };
+  let started = false;
+  const result = await runYieldProbe(state, {
+    timeout: 1000,
+    now() { return waits * 10; },
+    inject() {
+      started = true;
+      return { injectMethod: 'SendInput', sendInputCount: 2 };
     },
-    sleep() { throw new Error('wait advanced the clock'); }
-  }, function () { return t; });
-  assert.equal(timedOut, false);
-  assert.equal(calls[0], 'peek');
-  assert.ok(calls.some(function (item) { return item.startsWith('wait:'); }));
-  assert.ok(t >= 40);
-
-  let spun = 0;
-  let sleeps = 0;
-  pumpUntil(function () { return false; }, 12, {
-    peek() {},
-    wait() { spun += 1; },
-    sleep(ms) { sleeps += 1; spun += ms; }
-  }, function () { return spun > 12 ? 12 : 0; });
-  assert.ok(sleeps >= 1);
+    async wait() {
+      waits += 1;
+      if (waits === 2) {
+        state.probeSeen = true;
+        state.procEntered = 1;
+      }
+    }
+  });
+  assert.equal(started, true);
+  assert.equal(result.ok, true);
+  assert.ok(result.yields >= 2);
+  assert.equal(result.inject.injectMethod, 'SendInput');
 });
 
-test('windows probe path pumps and does not sample the flag after a sync keybd_event', function () {
-  const src = fs.readFileSync(path.join(__dirname, '../src/main/hook-win.js'), 'utf8');
-  assert.match(src, /runInstalledProbe/);
-  assert.match(src, /isProbeEvent/);
-  assert.match(src, /keybd_event\.async\(/);
-  assert.match(src, /PeekMessageW/);
-  assert.match(src, /MsgWaitForMultipleObjects/);
-  assert.match(src, /PM_NOREMOVE/);
-  assert.equal(PM_NOREMOVE, 0);
-  assert.equal(QS_ALLINPUT & 0x40, 0x40);
-  const withoutSignature = src.replace(/__stdcall keybd_event\([^)]*\)/g, '');
-  assert.equal(/keybd_event\s*\(/.test(withoutSignature), false);
-  // Win10+ caps LowLevelHooksTimeout at 1000ms. A shorter pump can Unhook
-  // the callback while the worker is still blocked inside keybd_event.
-  assert.ok(PROBE_PUMP_MS >= 1000);
+test('yield probe stays honest when the callback never runs', async function () {
+  let now = 0;
+  const result = await runYieldProbe({ probeSeen: false, procEntered: 0, procAtStart: 0 }, {
+    timeout: 30,
+    now() { return now; },
+    inject() { return { injectMethod: 'SendInput', sendInputCount: 0 }; },
+    async wait(ms) { now += ms || 1; }
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.yields >= 1);
 });
 
-test('probe before install does not claim the keyboard is locked', function () {
-  const { createWinHook } = require('../src/main/hook-win');
+test('native-style probe success marks the hook live without a real key', async function () {
+  const ctrl = { events: [] };
+  const backend = scriptedBackend(ctrl);
   const hook = createWinHook({
+    backend: backend,
     decide() { return { swallow: true }; }
   });
-  const result = hook.probe();
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'probe-no-hook');
-  assert.match(result.detail, /钩子句柄无效/);
+  const result = await hook.install();
+  assert.equal(result.ok, true);
+  assert.equal(result.awaitingRealKey, false);
+  assert.equal(hook.isActive(), true);
+  assert.equal(hook.isAwaitingProof(), false);
+  assert.deepEqual(ctrl.events, ['stop', 'start:addon', 'probe']);
+  assert.match(result.diagLine, /backend=fake/);
+  assert.match(result.diagLine, /procEntered=1/);
+  assert.match(result.diagLine, /probeSeen=1/);
+  assert.equal(summarizeAttempts([{ hMod: 'addon', ok: true, proven: true }]), 'addon:proven');
+});
+
+test('hMod attempts continue until the procedure actually runs', async function () {
+  const ctrl = {
+    events: [],
+    onProbe() {
+      const starts = ctrl.events.filter(function (item) { return item.indexOf('start:') === 0; });
+      const kind = starts[starts.length - 1];
+      if (kind === 'start:addon') return emptyProbe();
+      return emptyProbe({
+        proven: true,
+        probeSeen: false,
+        procEntered: 2,
+        procDelta: 2,
+        lastVk: PROBE_VK,
+        lastFlags: LLKHF_INJECTED,
+        lastExtra: '0'
+      });
+    }
+  };
+  const backend = scriptedBackend(ctrl);
+  const hook = createWinHook({ backend: backend, decide() { return { swallow: false }; } });
+  const result = await hook.install();
+  assert.equal(result.ok, true);
+  assert.equal(hook.isActive(), true);
+  assert.deepEqual(ctrl.events, ['stop', 'start:addon', 'probe', 'stop', 'start:null', 'probe']);
+  assert.match(result.diagLine, /tried=addon:no-proc,null:proven/);
+  assert.match(result.diag.tried, /null:proven/);
+  assert.equal(HMOD_ORDER[0], 'addon');
+  assert.equal(HMOD_ORDER[1], 'null');
+});
+
+test('synthetic miss keeps the hook and a real key proves it before lock', async function () {
+  const ctrl = { events: [], onProbe() { return emptyProbe(); } };
+  const backend = scriptedBackend(ctrl);
+  let proved = 0;
+  let locks = 0;
+  let decisions = 0;
+  const hook = createWinHook({
+    backend: backend,
+    decide() {
+      decisions += 1;
+      return { swallow: false };
+    },
+    onProven() { proved += 1; },
+    onLockFromProof() { locks += 1; }
+  });
+  const result = await hook.install();
+  assert.equal(result.ok, true);
+  assert.equal(result.awaitingRealKey, true);
   assert.equal(hook.isActive(), false);
+  assert.equal(hook.isAwaitingProof(), true);
+  assert.equal(hook.isInstalled(), true);
+  const passed = backend.emit('down', 0x41);
+  assert.equal(passed, false);
+  assert.equal(proved, 1);
+  assert.equal(locks, 0);
+  assert.equal(decisions, 1);
+  assert.equal(hook.isActive(), true);
+  assert.equal(hook.isAwaitingProof(), false);
+  assert.equal(trayStatus({ hookActive: false, hookAwaiting: true, locked: false }).text, '请按任意键确认');
+  assert.equal(trayStatus({ hookActive: true, locked: true }).text, '已上锁');
+});
+
+test('armed lock swallows the first real key and does not pretend before that', async function () {
+  const ctrl = { events: [], onProbe() { return emptyProbe(); } };
+  const backend = scriptedBackend(ctrl);
+  let locks = 0;
+  let decisions = 0;
+  const hook = createWinHook({
+    backend: backend,
+    decide() {
+      decisions += 1;
+      return { swallow: false };
+    },
+    onLockFromProof() { locks += 1; }
+  });
+  await hook.install();
+  assert.equal(hook.armLock(), 'wait');
+  const swallowed = backend.emit('down', 0x42);
+  assert.equal(swallowed, true);
+  assert.equal(locks, 1);
+  assert.equal(decisions, 0);
+  assert.equal(hook.isActive(), true);
+  backend.emit('down', 0x43);
+  assert.equal(decisions, 1);
+});
+
+test('give up after a missed probe and no real key is an honest failure', async function () {
+  const ctrl = {
+    events: [],
+    onProbe() { return emptyProbe({ lastFlags: 0, lastExtra: '0x0' }); },
+    stats: { procEntered: 0, probeSeen: false, lastVk: 0, lastFlags: 0, lastExtra: '0x0', pump: 'GetMessage' }
+  };
+  const backend = scriptedBackend(ctrl);
+  const hook = createWinHook({ backend: backend, decide() { return { swallow: false }; } });
+  await hook.install();
+  const failed = hook.giveUp();
+  assert.equal(failed.ok, false);
+  assert.equal(failed.code, 'probe-not-sync');
+  assert.equal(PROBE_NOT_SYNC_DETAIL, '钩子没有在按键到达其他程序之前同步拦住测试按键，真实按键也没有进入回调，因此不能用来上锁。');
+  assert.match(failed.detail, /真实按键也没有进入回调/);
+  assert.match(failed.detail, /procEntered=0/);
+  assert.match(failed.detail, /lastFlags=0x0/);
+  assert.match(formatDiag(failed.diag), /v=0\.1\.3/);
+  assert.equal(hook.isActive(), false);
+  assert.equal(hook.isInstalled(), false);
+  assert.equal(hook.isAwaitingProof(), false);
+});
+
+test('SetWindowsHookEx failure does not report the keyboard locked', async function () {
+  const ctrl = {
+    events: [],
+    onStart() { return { ok: false, lastError: 5, hMod: 'addon' }; }
+  };
+  const backend = scriptedBackend(ctrl);
+  const hook = createWinHook({ backend: backend, decide() { return { swallow: true }; } });
+  const result = await hook.install();
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'set-hook-failed');
+  assert.match(result.detail, /系统错误码 5/);
+  assert.equal(hook.isActive(), false);
+  assert.equal(hook.isInstalled(), false);
+});
+
+test('v0.1.3 hook path is a real GetMessage thread, not the koffi pump', function () {
+  const root = path.join(__dirname, '..');
+  const win = fs.readFileSync(path.join(root, 'src/main/hook-win.js'), 'utf8');
+  const index = fs.readFileSync(path.join(root, 'src/main/index.js'), 'utf8');
+  const native = fs.readFileSync(path.join(root, 'native/hook_thread.c'), 'utf8');
+  const pkg = fs.readFileSync(path.join(root, 'package.json'), 'utf8');
+  assert.equal(fs.existsSync(path.join(root, 'src/main/message-pump.js')), false);
+  assert.equal(/keybd_event\.async/.test(win), false);
+  assert.equal(/PeekMessageW/.test(win), false);
+  assert.equal(/hook\.probe\(/.test(index), false);
+  assert.match(index, /awaitingRealKey/);
+  assert.match(index, /还没锁住/);
+  assert.match(index, /canPresentLocked/);
+  assert.match(native, /GetMessageW/);
+  assert.match(native, /DispatchMessageW/);
+  assert.match(native, /SendInput/);
+  assert.match(native, /SetWindowsHookExW\(WH_KEYBOARD_LL/);
+  assert.equal(native.includes('WH_MOUSE'), false);
+  assert.match(pkg, /hook_thread\.node/);
+  assert.match(pkg, /"version": "0\.1\.3"/);
+  assert.match(pkg, /asInvoker/);
+  assert.deepEqual(HMOD_ORDER, ['addon', 'null', 'exe']);
 });

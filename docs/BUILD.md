@@ -1,6 +1,6 @@
 # 构建 Windows 安装包
 
-宝宝锁 v0.1.2 用 Electron 做界面（直接沿用 `docs/design/v0/` 的挂件、设置、托盘菜单和 toast），主进程通过 [koffi](https://koffi.dev/) 调用 `SetWindowsHookExW(WH_KEYBOARD_LL)` 拦截键盘。不锁鼠标。安装包是 NSIS，文件名 `Baobao-Lock-Setup-0.1.2.exe`。
+宝宝锁 v0.1.3 用 Electron 做界面（直接沿用 `docs/design/v0/` 的挂件、设置、托盘菜单和 toast），键盘钩子在独立原生线程里调用 `SetWindowsHookExW(WH_KEYBOARD_LL)` 并自己跑 `GetMessage`。不锁鼠标。安装包是 NSIS，文件名 `Baobao-Lock-Setup-0.1.3.exe`。
 
 只支持 64 位 Windows 10 / 11。默认 **不以管理员身份** 运行（清单 `asInvoker`，安装到当前用户目录）。
 
@@ -17,7 +17,7 @@ npm run dist
 产物：
 
 ```text
-release/Baobao-Lock-Setup-0.1.2.exe
+release/Baobao-Lock-Setup-0.1.3.exe
 ```
 
 安装后的程序名是 `BaobaoLock.exe`，开始菜单和桌面快捷方式显示「宝宝锁」。安装结束可选择立刻打开；打开后停在托盘，**不会上锁**。不会写入开机启动项。
@@ -53,9 +53,11 @@ npm run icons
 
 程序会弹出「键盘钩子未生效 / 键盘现在没有锁住」，托盘状态是「钩子未生效」，**不会**出现已上锁挂件。可以右键 `BaobaoLock.exe`，选「以管理员身份运行」再试一次。平时不需要管理员。
 
-钩子回调必须在按键交给其他程序之前同步返回。安装时会用一个不会打到文本里的探测键（F23）确认这一点；探测失败同样视为没锁上。
+钩子回调必须在按键交给其他程序之前同步返回。安装时会从另一条线程 `SendInput` 一个不会打出字符的探测键（VK `0xE8`）。探测键如果没进回调，钩子先留着，等第一次真实按键；确认前不会显示已上锁。真实按键也进不了回调，才卸掉并说明键盘没有锁住。
 
-低级键盘钩子只在安装它的那条线程正在 `PeekMessage` / `GetMessage` 时才会被调用。0.1.1 在同一条线程里同步调用 `keybd_event`，函数一返回就读标志，回调还没跑，自检总是失败（`probe-not-sync`），然后把钩子卸掉。0.1.2 把测试按键改到别的线程注入，安装线程在这段时间里泵消息。钩子真的拦到测试键才算装上；拦不到仍然明确说键盘没有锁住，不会假装已上锁。以管理员再运行一次不是这条的修法。状态以仓库首页 [已知问题](../README.md#已知问题) 为准。
+低级键盘钩子只在安装它的那条线程正在 `GetMessage` / `PeekMessage` 时才会被调用。0.1.1 在同一条线程里同步调用 `keybd_event`，函数一返回就读标志。0.1.2 改成 koffi 异步注入，再在主线程里同步 `PeekMessage` / `MsgWaitForMultipleObjects`；医生的 Windows 10 上回调仍然进不了 JS，自检还是 `probe-not-sync`，钩子被卸掉。0.1.3 把钩子装在独立线程的 `GetMessage` 循环上，探测在原生代码里认。koffi 只作为这个原生模块没载入时的后备。以管理员再运行一次不是这条的修法。状态以仓库首页 [已知问题](../README.md#已知问题) 为准。
+
+`npm run dist` 会先 `node-gyp rebuild --directory native`，编出 N-API 模块 `native/build/Release/hook_thread.node`。它不需要按 Electron 头文件重编。Windows 上需要 Visual Studio 的 C++ 生成工具（GitHub `windows-latest` 自带）。
 
 对话框里的「详情」分两种：`SetWindowsHookExW 失败（系统错误码 …）` 是 Windows 的返回值；`程序内部错误，不是权限不足：…` 是脚本异常。0.1.0 里第二次安装钩子会把 `kernel32` 弄丢，详情变成 `Cannot read properties of undefined (reading 'func')`。那是内部错误，键盘并没有锁上。0.1.1 会把已加载的 `user32` / `kernel32` 缓存下来再返回。
 

@@ -35,7 +35,7 @@ test('windows hook is keyboard-only and boot does not auto-lock', function () {
   assert.match(read('src/renderer/settings.html'), /开机不会自动上锁/);
   assert.match(read('src/renderer/settings.html'), /鼠标照常用/);
   assert.match(read('package.json'), /Baobao-Lock-Setup-\$\{version\}/);
-  assert.match(read('package.json'), /"version": "0\.1\.2"/);
+  assert.match(read('package.json'), /"version": "0\.1\.3"/);
   assert.match(read('package.json'), /"executableName": "BaobaoLock"/);
   assert.match(read('package.json'), /asInvoker/);
 });

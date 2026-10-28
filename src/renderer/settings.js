@@ -7,6 +7,7 @@ var draft = {
   alwaysOnTop: true
 };
 var hookActive = true;
+var hookAwaiting = false;
 var captureWhich = null;
 
 var lockBtn = document.getElementById('lockBtn');
@@ -39,7 +40,15 @@ function render() {
   paintHotkey(unlockBtn, draft.unlockHotkey, 'unlock');
   paintToggle(tipBtn, draft.tipSound);
   paintToggle(topBtn, draft.alwaysOnTop);
-  banner.hidden = hookActive !== false;
+  if (hookActive === false && hookAwaiting) {
+    banner.hidden = false;
+    banner.textContent = '钩子已装上，请按任意键确认。确认前不会进入已上锁。';
+  } else if (hookActive === false) {
+    banner.hidden = false;
+    banner.textContent = '键盘钩子未生效，现在没有锁住键盘。可以右键本程序，选择「以管理员身份运行」再试一次。';
+  } else {
+    banner.hidden = true;
+  }
 }
 
 function showError(text) {
@@ -59,6 +68,7 @@ function applyData(data) {
   draft.tipSound = !!data.tipSound;
   draft.alwaysOnTop = data.alwaysOnTop !== false;
   hookActive = data.hookActive !== false;
+  hookAwaiting = !!data.hookAwaiting;
   captureWhich = null;
   showError('');
   render();
