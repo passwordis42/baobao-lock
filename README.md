@@ -2,7 +2,7 @@
 
 开会或直播时锁住键盘，免得小孩乱按。鼠标和触控板照常使用。组合键解锁，长按 Esc 3 秒也可以解锁。不和专注守卫联动，开机不会自动上锁。
 
-当前版本 **0.1.0**（Windows）。界面以医生已确认的 [UI v0](docs/design/v0/README.md) 为准，需求见 [docs/PRD.md](docs/PRD.md)。
+当前版本 **0.1.1**（Windows）。界面以医生已确认的 [UI v0](docs/design/v0/README.md) 为准，需求见 [docs/PRD.md](docs/PRD.md)。
 
 ## 怎么用
 
@@ -17,7 +17,7 @@
 
 ## 构建
 
-Windows 安装包的步骤在 [docs/BUILD.md](docs/BUILD.md)。安装包文件名是 `Baobao-Lock-Setup-0.1.0.exe`。
+Windows 安装包的步骤在 [docs/BUILD.md](docs/BUILD.md)。安装包文件名是 `Baobao-Lock-Setup-0.1.1.exe`。
 
 ```bash
 npm ci

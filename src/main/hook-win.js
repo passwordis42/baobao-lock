@@ -14,6 +14,8 @@
  */
 
 const koffi = require('koffi');
+const { createApiLoader } = require('./api-loader');
+const { describeHookException, describeWin32HookFailure } = require('../shared/messages');
 const { PROBE_EXTRA, isProbeExtra } = require('../shared/probe');
 
 const WH_KEYBOARD_LL = 13;
@@ -45,33 +47,34 @@ function createWinHook(options) {
   const decide = options.decide;
   const onError = options.onError || function () {};
 
-  let user32 = null;
   let SetWindowsHookExW = null;
   let CallNextHookEx = null;
   let UnhookWindowsHookEx = null;
   let GetLastError = null;
   let keybd_event = null;
+  let bound = false;
   let hHook = null;
   let callback = null;
   let active = false;
   let probeSeen = false;
+  const loadLibs = createApiLoader(function (name) { return koffi.load(name); });
 
   function loadApi() {
-    if (user32) return;
-    user32 = koffi.load('user32.dll');
-    const kernel32 = koffi.load('kernel32.dll');
-    SetWindowsHookExW = user32.func(
+    const libs = loadLibs();
+    if (bound) return libs.kernel32;
+    SetWindowsHookExW = libs.user32.func(
       'void * __stdcall SetWindowsHookExW(int idHook, LowLevelProc *lpfn, void *hMod, uint32 dwThreadId)'
     );
-    CallNextHookEx = user32.func(
+    CallNextHookEx = libs.user32.func(
       'intptr_t __stdcall CallNextHookEx(void *hhk, int nCode, uintptr_t wParam, intptr_t lParam)'
     );
-    UnhookWindowsHookEx = user32.func('bool __stdcall UnhookWindowsHookEx(void *hhk)');
-    keybd_event = user32.func(
+    UnhookWindowsHookEx = libs.user32.func('bool __stdcall UnhookWindowsHookEx(void *hhk)');
+    keybd_event = libs.user32.func(
       'void __stdcall keybd_event(uint8 bVk, uint8 bScan, uint32 dwFlags, uintptr_t dwExtraInfo)'
     );
-    GetLastError = kernel32.func('uint32 __stdcall GetLastError()');
-    return kernel32;
+    GetLastError = libs.kernel32.func('uint32 __stdcall GetLastError()');
+    bound = true;
+    return libs.kernel32;
   }
 
   function proc(nCode, wParam, lParam) {
@@ -164,7 +167,7 @@ function createWinHook(options) {
         return {
           ok: false,
           code: 'set-hook-failed',
-          detail: 'SetWindowsHookExW 失败（错误码 ' + set.error + '）。'
+          detail: describeWin32HookFailure(set.error)
         };
       }
       hHook = set.handle;
@@ -180,7 +183,7 @@ function createWinHook(options) {
       return {
         ok: false,
         code: 'hook-exception',
-        detail: err && err.message ? String(err.message) : String(err)
+        detail: describeHookException(err)
       };
     }
   }
@@ -195,6 +198,7 @@ function createWinHook(options) {
 
 module.exports = {
   createWinHook,
+  createApiLoader,
   WH_KEYBOARD_LL,
   KBDLLHOOKSTRUCT
 };

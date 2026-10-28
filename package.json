@@ -1,6 +1,6 @@
 {
   "name": "baobao-lock",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "开会/直播时锁住键盘，鼠标照常用。开机不会自动上锁。",
   "author": "宝宝锁",
@@ -36,7 +36,7 @@
     ],
     "asar": true,
     "asarUnpack": [
-      "**/node_modules/koffi/**"
+      "**/node_modules/koffi/**/*"
     ],
     "win": {
       "target": [
