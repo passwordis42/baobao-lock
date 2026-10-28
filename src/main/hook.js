@@ -14,13 +14,30 @@ function createUnsupportedHook() {
         detail: '宝宝锁的键盘钩子只支持 Windows。'
       };
     },
-    probe() {
-      return { ok: false, code: 'unsupported-platform', detail: '宝宝锁的键盘钩子只支持 Windows。' };
-    },
     uninstall() {},
     isActive() {
       return false;
-    }
+    },
+    isInstalled() {
+      return false;
+    },
+    isAwaitingProof() {
+      return false;
+    },
+    isAlive() {
+      return false;
+    },
+    armLock() {
+      return 'absent';
+    },
+    giveUp() {
+      return {
+        ok: false,
+        code: 'unsupported-platform',
+        detail: '宝宝锁的键盘钩子只支持 Windows。'
+      };
+    },
+    setLocked() {}
   };
 }
 

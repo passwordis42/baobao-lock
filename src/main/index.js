@@ -43,7 +43,10 @@ let toastVisible = false;
 let dialogOpen = false;
 let emergencyTimer = null;
 let probeTimer = null;
+let proofTimer = null;
+let proofHint = false;
 let quitting = false;
+const PROOF_WAIT_MS = 30000;
 
 function logLine(line) {
   try {
@@ -122,13 +125,18 @@ function settingsPayload() {
     tipSound: s.settings.tipSound,
     alwaysOnTop: s.settings.alwaysOnTop,
     hookActive: s.hookActive,
+    hookAwaiting: !!(hook && hook.isAwaitingProof && hook.isAwaitingProof()),
     locked: canPresentLocked(s)
   };
 }
 
 function menuPayload() {
   const s = state();
-  const status = trayStatus(s);
+  const status = trayStatus({
+    hookActive: s.hookActive,
+    locked: s.locked,
+    hookAwaiting: !!(hook && hook.isAwaitingProof && hook.isAwaitingProof())
+  });
   return {
     locked: canPresentLocked(s),
     hookActive: s.hookActive,
@@ -209,6 +217,7 @@ function presentLockedUi() {
 
 function hideLockedUi() {
   toastVisible = false;
+  proofHint = false;
   if (toastTimer) clearTimeout(toastTimer);
   if (toastWin && !toastWin.isDestroyed()) toastWin.hide();
   if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide();
@@ -484,8 +493,16 @@ function flush(actions) {
     }
     if (action.type === 'capture-cancel') {
       send(settingsWin, 'capture-cancel', {});
+      return;
+    }
+    if (action.type === 'proof-done') {
+      hideProofHint();
+      stopProofTimer();
+      updateTray();
+      send(settingsWin, 'settings-data', settingsPayload());
     }
   });
+  if (hook && hook.setLocked) hook.setLocked(!!state().locked);
 }
 
 function validateHotkeySafe(hotkey) {
@@ -504,48 +521,99 @@ function stopProbeWatch() {
   probeTimer = null;
 }
 
-function ensureHook() {
-  const result = hook.install();
-  const actions = controller.setHookActive(!!result.ok);
-  flush(actions);
-  if (result.ok) {
+async function ensureHook() {
+  const result = await hook.install();
+  if (result && result.ok && hook.isActive()) {
+    flush(controller.setHookActive(true));
+    if (hook.setLocked) hook.setLocked(false);
     logLine('hook installed');
     startProbeWatch();
-  } else {
-    logLine('install failed ' + result.code + ' ' + (result.detail || ''));
-    stopProbeWatch();
+    return result;
   }
-  return result;
+  if (result && result.ok && result.awaitingRealKey) {
+    flush(controller.setHookActive(false));
+    logLine('hook installed awaiting real key');
+    startProbeWatch();
+    updateTray();
+    send(settingsWin, 'settings-data', settingsPayload());
+    return result;
+  }
+  flush(controller.setHookActive(false));
+  stopProbeWatch();
+  logLine('install failed ' + (result && result.code ? result.code : '') + ' ' + (result && result.detail ? result.detail : ''));
+  return result || { ok: false, code: 'hook-exception', detail: '安装没有返回结果。' };
+}
+
+function stopProofTimer() {
+  if (!proofTimer) return;
+  clearTimeout(proofTimer);
+  proofTimer = null;
+}
+
+function showProofHint() {
+  ensureToast();
+  const deliver = function () {
+    send(toastWin, 'toast', {
+      title: '还没锁住',
+      sub: '请按任意键，拦住后才会上锁',
+      sound: false,
+      playSound: false
+    });
+    placeToast();
+    toastWin.showInactive();
+    toastWin.moveTop();
+  };
+  if (toastWin.webContents.isLoading()) toastWin.webContents.once('did-finish-load', deliver);
+  else deliver();
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = null;
+  proofHint = true;
+}
+
+function hideProofHint() {
+  if (!proofHint) return;
+  proofHint = false;
+  toastVisible = false;
+  if (toastWin && !toastWin.isDestroyed()) toastWin.hide();
+}
+
+function beginKeyProof() {
+  hook.armLock();
+  showProofHint();
+  stopProofTimer();
+  proofTimer = setTimeout(function () {
+    proofTimer = null;
+    if (hook.isActive()) {
+      hideProofHint();
+      updateTray();
+      return;
+    }
+    const failed = hook.giveUp();
+    hideProofHint();
+    flush(controller.setHookActive(false));
+    updateTray();
+    send(settingsWin, 'settings-data', settingsPayload());
+    explainHook(failed);
+  }, PROOF_WAIT_MS);
+  updateTray();
+  send(settingsWin, 'settings-data', settingsPayload());
 }
 
 async function doLock() {
-  if (!hook.isActive()) {
-    const result = ensureHook();
-    if (!result.ok) {
+  if (!hook.isInstalled() || !hook.isAlive()) {
+    const result = await ensureHook();
+    if (!result || !result.ok) {
       hideLockedUi();
-      await explainHook(result);
-      return;
-    }
-  } else {
-    let probed;
-    try {
-      probed = hook.probe();
-    } catch (err) {
-      probed = { ok: false, code: 'probe-exception', detail: err.message };
-    }
-    if (!probed.ok) {
-      const wasLocked = state().locked;
-      hook.uninstall();
-      flush(controller.setHookActive(false));
-      if (!wasLocked) await explainHook(probed);
+      await explainHook(result || { detail: '键盘钩子没有装上。' });
       return;
     }
   }
-  const res = controller.requestLock();
-  flush(res.actions);
-  if (!canPresentLocked(state())) {
-    await explainHook({ code: 'hook-missing', detail: '键盘钩子未在运行。' });
+  if (hook.isActive()) {
+    const res = controller.requestLock();
+    flush(res.actions);
+    return;
   }
+  beginKeyProof();
 }
 
 function doUnlock() {
@@ -571,19 +639,13 @@ function stopEmergencyTimer() {
 function startProbeWatch() {
   stopProbeWatch();
   probeTimer = setInterval(function () {
-    if (!hook.isActive()) return;
-    let result;
-    try {
-      result = hook.probe();
-    } catch (err) {
-      result = { ok: false, code: 'probe-exception', detail: err.message };
-    }
-    if (result && result.ok) return;
-    const wasLocked = state().locked;
+    if (!hook.isInstalled()) return;
+    if (hook.isAlive()) return;
     hook.uninstall();
     const actions = controller.setHookActive(false);
     flush(actions);
-    if (!wasLocked) explainHook(result || { detail: '键盘钩子已失效。' });
+    hideProofHint();
+    stopProofTimer();
   }, PROBE_MS);
 }
 
@@ -676,9 +738,10 @@ function quitApp() {
   app.quit();
 }
 
-function boot() {
+async function boot() {
   store = createSettingsStore(settingsPath());
   controller = createLockController({ settings: store.get() });
+  logLine('boot v' + require('../../package.json').version);
   hook = createHook({
     decide(event) {
       const result = controller.event(event);
@@ -687,10 +750,26 @@ function boot() {
     },
     onError(err) {
       logLine('hook callback error ' + (err && err.message ? err.message : String(err)));
+    },
+    onDiagnostic(line) {
+      logLine('hook-diag ' + line);
+    },
+    onProven() {
+      controller.setHookActive(true);
+      schedule([{ type: 'proof-done' }]);
+    },
+    onLockFromProof() {
+      controller.setHookActive(true);
+      const res = controller.requestLock();
+      if (hook.setLocked) hook.setLocked(true);
+      schedule((res.actions || []).concat([{ type: 'proof-done' }]));
+    },
+    isLocked() {
+      return !!(controller && controller.getState().locked);
     }
   });
   Menu.setApplicationMenu(null);
-  const result = ensureHook();
+  const result = await ensureHook();
   if (process.env.BABAO_SMOKE === '1') {
     const s = state();
     process.stdout.write(JSON.stringify({
@@ -723,6 +802,7 @@ if (gotInstance) {
     quitting = true;
     if (hook) hook.uninstall();
     if (probeTimer) clearInterval(probeTimer);
+    if (proofTimer) clearTimeout(proofTimer);
     stopEmergencyTimer();
   });
   app.on('window-all-closed', function () {

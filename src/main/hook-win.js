@@ -1,222 +1,279 @@
 'use strict';
 
 /**
- * Low-level keyboard hook (WH_KEYBOARD_LL = 13).
+ * Keyboard hook for Windows.
  *
- * Windows calls the hook on the thread that installed it, and only while that
- * thread is inside PeekMessage / GetMessage / MsgWaitForMultipleObjects.
- * Electron pumps those messages when the main loop is idle, so a real key can
- * be swallowed before another program sees it.
+ * v0.1.2 still reported probe-not-sync on a real Windows 10 machine. koffi
+ * really does run an async keybd_event on a libuv worker, but the installing
+ * thread pumped with a synchronous koffi PeekMessage / MsgWait. The low-level
+ * hook is only delivered while that thread is in a message wait, and koffi
+ * cannot run the JS callback there: either the callback is nested in koffi's
+ * private stack, or it is bounced through napi_call_threadsafe_function and
+ * the main thread never drains it because it is blocked inside the pump.
+ * install() then unhooked, so real keys were never tested.
  *
- * The install self-test used to call keybd_event on this same thread and read
- * a flag as soon as it returned. The callback had not run yet, so the flag
- * stayed false, install() removed a hook that would have worked, and the
- * keyboard never locked (probe-not-sync). The test key is now injected with
- * keybd_event.async (a worker thread) while this thread pumps. Success means
- * the hook observed that key. If it does not, the keyboard is not locked.
+ * v0.1.3 installs WH_KEYBOARD_LL on a dedicated native thread that blocks in
+ * GetMessageW / DispatchMessageW. The probe is SendInput (keybd_event only if
+ * SendInput returns short) on a second thread, recognized in native code.
+ * hMod is tried as the addon DLL, then NULL (the documented in-process value),
+ * then the exe. A hook that never sees the synthetic key stays installed and
+ * is proved by the first real key. Nothing is shown as locked until a key has
+ * actually entered the hook procedure. If that never happens, the hook is
+ * removed and the failure dialog stays honest.
  *
  * Mouse / trackpad are never hooked.
  */
 
-const koffi = require('koffi');
-const { createApiLoader } = require('./api-loader');
-const { pumpUntil, PM_NOREMOVE, QS_ALLINPUT, PROBE_PUMP_MS } = require('./message-pump');
+const fs = require('fs');
+const path = require('path');
 const { describeHookException, describeWin32HookFailure } = require('../shared/messages');
-const { isProbeEvent, runInstalledProbe } = require('../shared/probe');
+const {
+  HMOD_ORDER,
+  PROBE_NOT_SYNC_DETAIL,
+  formatDiag,
+  summarizeAttempts,
+  createHookSession
+} = require('../shared/probe');
 
 const WH_KEYBOARD_LL = 13;
-const WM_KEYDOWN = 0x0100;
-const WM_KEYUP = 0x0101;
-const WM_SYSKEYDOWN = 0x0104;
-const WM_SYSKEYUP = 0x0105;
+const VERSION = require('../../package.json').version;
 
-const KBDLLHOOKSTRUCT = koffi.struct('KBDLLHOOKSTRUCT', {
-  vkCode: 'uint32',
-  scanCode: 'uint32',
-  flags: 'uint32',
-  time: 'uint32',
-  dwExtraInfo: 'uintptr_t'
-});
+function nativeCandidates() {
+  const rel = path.join('native', 'build', 'Release', 'hook_thread.node');
+  const dev = path.join(__dirname, '..', '..', rel);
+  const unpackedRoot = __dirname.replace(/app\.asar([\\/]|$)/, 'app.asar.unpacked$1');
+  const unpacked = path.join(unpackedRoot, '..', '..', rel);
+  return [unpacked, dev];
+}
 
-const LowLevelProc = koffi.proto(
-  'intptr_t __stdcall LowLevelProc(int nCode, uintptr_t wParam, intptr_t lParam)'
-);
+function loadNativeAddon() {
+  const seen = Object.create(null);
+  const errors = [];
+  const files = nativeCandidates();
+  for (let i = 0; i < files.length; i += 1) {
+    const file = files[i];
+    if (seen[file]) continue;
+    seen[file] = true;
+    if (!fs.existsSync(file)) {
+      errors.push('missing ' + file);
+      continue;
+    }
+    try {
+      return { addon: require(file), error: '' };
+    } catch (err) {
+      errors.push((err && err.message) ? err.message : String(err));
+    }
+  }
+  return { addon: null, error: errors.join(' | ') || 'missing' };
+}
 
-function asNumber(value) {
-  if (typeof value === 'bigint') return Number(value);
-  return Number(value);
+function wrapNative(addon) {
+  return {
+    kind: 'native-thread',
+    nativeLoadError: '',
+    setHandler(fn) { addon.setHandler(fn); },
+    setLocked(locked) { addon.setLocked(!!locked); },
+    isAlive() { return !!addon.isAlive(); },
+    stats() { return addon.stats(); },
+    start(kind) { return addon.start(kind); },
+    probe() { return addon.probe(); },
+    stop() { addon.stop(); }
+  };
+}
+
+function createMissingBackend() {
+  return {
+    kind: 'missing',
+    nativeLoadError: '',
+    setHandler() {},
+    setLocked() {},
+    isAlive() { return false; },
+    stats() { return null; },
+    start() {
+      return {
+        ok: false,
+        lastError: 0,
+        hMod: 'none',
+        code: 'unsupported-platform',
+        detail: '宝宝锁的键盘钩子只支持 Windows。'
+      };
+    },
+    probe() {
+      return emptyProbe();
+    },
+    stop() {}
+  };
+}
+
+function emptyProbe() {
+  return {
+    proven: false,
+    probeSeen: false,
+    procEntered: 0,
+    procDelta: 0,
+    lastVk: 0,
+    lastFlags: 0,
+    lastExtra: '0',
+    sendInputCount: 0,
+    injectMethod: '',
+    yields: 0,
+    pump: '',
+    elapsedMs: 0
+  };
+}
+
+function createPlatformBackend() {
+  if (process.platform !== 'win32') return createMissingBackend();
+  const loaded = loadNativeAddon();
+  if (loaded.addon) return wrapNative(loaded.addon);
+  const { createKoffiBackend } = require('./hook-koffi');
+  const backend = createKoffiBackend();
+  backend.nativeLoadError = loaded.error || 'missing';
+  return backend;
+}
+
+function rowDetail(row) {
+  if (!row) return describeWin32HookFailure(0);
+  if (row.detail) return String(row.detail);
+  if (row.code === 'unsupported-platform') return '宝宝锁的键盘钩子只支持 Windows。';
+  return describeWin32HookFailure(row.lastError || 0);
+}
+
+function makeDiag(row, attempts, backend) {
+  const last = row || {};
+  return {
+    version: VERSION,
+    backend: backend && backend.kind ? backend.kind : '',
+    hMod: last.hMod || '',
+    pump: last.pump || (backend && backend.kind === 'native-thread' ? 'GetMessage' : ''),
+    attempts: attempts.length,
+    tried: summarizeAttempts(attempts),
+    procEntered: last.procEntered || 0,
+    probeSeen: !!last.probeSeen,
+    proven: !!last.proven,
+    lastVk: last.lastVk || 0,
+    lastFlags: last.lastFlags || 0,
+    lastExtra: last.lastExtra == null ? '0' : String(last.lastExtra),
+    injectMethod: last.injectMethod || '',
+    sendInputCount: last.sendInputCount || 0,
+    yields: last.yields || 0,
+    elapsedMs: last.elapsedMs || 0,
+    nativeLoadError: backend && backend.nativeLoadError ? backend.nativeLoadError : ''
+  };
 }
 
 function createWinHook(options) {
-  const decide = options.decide;
-  const onError = options.onError || function () {};
+  const opts = options || {};
+  const decide = opts.decide || function () { return { swallow: false }; };
+  const onError = opts.onError || function () {};
+  const onDiagnostic = opts.onDiagnostic || function () {};
+  const onProven = opts.onProven || function () {};
+  const onLockFromProof = opts.onLockFromProof || function () {};
+  const backend = opts.backend || createPlatformBackend();
+  const session = createHookSession();
+  let installed = false;
+  let lastDiag = null;
 
-  let SetWindowsHookExW = null;
-  let CallNextHookEx = null;
-  let UnhookWindowsHookEx = null;
-  let GetLastError = null;
-  let keybd_event = null;
-  let PeekMessageW = null;
-  let MsgWaitForMultipleObjects = null;
-  let Sleep = null;
-  let bound = false;
-  let hHook = null;
-  let callback = null;
-  let active = false;
-  let probing = false;
-  let probeSeen = false;
-  const probeMsg = Buffer.alloc(64);
-  const loadLibs = createApiLoader(function (name) { return koffi.load(name); });
-
-  function loadApi() {
-    const libs = loadLibs();
-    if (bound) return libs.kernel32;
-    SetWindowsHookExW = libs.user32.func(
-      'void * __stdcall SetWindowsHookExW(int idHook, LowLevelProc *lpfn, void *hMod, uint32 dwThreadId)'
-    );
-    CallNextHookEx = libs.user32.func(
-      'intptr_t __stdcall CallNextHookEx(void *hhk, int nCode, uintptr_t wParam, intptr_t lParam)'
-    );
-    UnhookWindowsHookEx = libs.user32.func('bool __stdcall UnhookWindowsHookEx(void *hhk)');
-    keybd_event = libs.user32.func(
-      'void __stdcall keybd_event(uint8 bVk, uint8 bScan, uint32 dwFlags, uintptr_t dwExtraInfo)'
-    );
-    PeekMessageW = libs.user32.func(
-      'int __stdcall PeekMessageW(void *lpMsg, void *hWnd, uint32 wMsgFilterMin, uint32 wMsgFilterMax, uint32 wRemoveMsg)'
-    );
-    MsgWaitForMultipleObjects = libs.user32.func(
-      'uint32 __stdcall MsgWaitForMultipleObjects(uint32 nCount, void *pHandles, int fWaitAll, uint32 dwMilliseconds, uint32 dwWakeMask)'
-    );
-    GetLastError = libs.kernel32.func('uint32 __stdcall GetLastError()');
-    Sleep = libs.kernel32.func('void __stdcall Sleep(uint32 dwMilliseconds)');
-    bound = true;
-    return libs.kernel32;
-  }
-
-  function proc(nCode, wParam, lParam) {
+  function onKey(phase, vk) {
+    const step = session.consumeKey(phase);
+    if (step.proved) {
+      try { onProven(); } catch (err) { onError(err); }
+    }
+    if (step.lockNow) {
+      try { onLockFromProof(); } catch (err) { onError(err); }
+      return true;
+    }
     try {
-      if (asNumber(nCode) < 0) {
-        return CallNextHookEx(hHook, nCode, wParam, lParam);
-      }
-      const kb = koffi.decode(lParam, KBDLLHOOKSTRUCT);
-      if (isProbeEvent(kb, probing)) {
-        probeSeen = true;
-        return 1;
-      }
-      const msg = asNumber(wParam);
-      let phase = null;
-      if (msg === WM_KEYDOWN || msg === WM_SYSKEYDOWN) phase = 'down';
-      else if (msg === WM_KEYUP || msg === WM_SYSKEYUP) phase = 'up';
-      if (!phase) return CallNextHookEx(hHook, nCode, wParam, lParam);
       const decision = decide({
         phase: phase,
-        vk: asNumber(kb.vkCode),
+        vk: typeof vk === 'bigint' ? Number(vk) : Number(vk),
         now: Date.now()
       });
-      if (decision && decision.swallow) return 1;
-      return CallNextHookEx(hHook, nCode, wParam, lParam);
+      return !!(decision && decision.swallow);
     } catch (err) {
       try { onError(err); } catch (ignore) { /* keep the hook alive */ }
-      try {
-        return CallNextHookEx(hHook, nCode, wParam, lParam);
-      } catch (ignore) {
-        return 0;
-      }
+      return !!(opts.isLocked && opts.isLocked());
     }
   }
 
-  function clearCallback() {
-    if (!callback) return;
-    try { koffi.unregister(callback); } catch (err) { /* already gone */ }
-    callback = null;
+  function note(diag) {
+    lastDiag = diag;
+    try { onDiagnostic(formatDiag(diag)); } catch (err) { /* logging must not break install */ }
   }
 
-  function uninstall() {
-    active = false;
-    if (hHook && UnhookWindowsHookEx) {
-      try { UnhookWindowsHookEx(hHook); } catch (err) { /* process exit still drops it */ }
-    }
-    hHook = null;
-    clearCallback();
-  }
-
-  function trySetHook(hMod) {
-    clearCallback();
-    callback = koffi.register(proc, koffi.pointer(LowLevelProc));
-    const handle = SetWindowsHookExW(WH_KEYBOARD_LL, callback, hMod, 0);
-    if (!handle) {
-      const code = GetLastError ? GetLastError() : 0;
-      clearCallback();
-      return { handle: null, error: code };
-    }
-    return { handle: handle, error: 0 };
-  }
-
-  function injectAsync(vk, scan, flags, extra) {
-    keybd_event.async(vk, scan, flags, extra, function (err) {
-      if (!err) return;
-      try { onError(err); } catch (ignore) { /* probe result is what the user sees */ }
-    });
-  }
-
-  function pumpProbe(pred) {
-    return pumpUntil(pred, PROBE_PUMP_MS, {
-      peek() { PeekMessageW(probeMsg, null, 0, 0, PM_NOREMOVE); },
-      wait(ms) { MsgWaitForMultipleObjects(0, null, 0, ms, QS_ALLINPUT); },
-      sleep(ms) { Sleep(ms); }
-    });
-  }
-
-  function probe() {
-    if (!hHook || !keybd_event || !PeekMessageW || !MsgWaitForMultipleObjects || !Sleep) {
-      return { ok: false, code: 'probe-no-hook', detail: '钩子句柄无效。' };
-    }
-    // PeekMessage can deliver the hook (and other sent messages) before it
-    // returns. A nested probe must not uninstall the hook still under test.
-    if (probing) return { ok: true };
-    probing = true;
+  async function install() {
+    uninstall();
     try {
-      return runInstalledProbe(
-        {
-          get hHook() { return hHook; },
-          get probeSeen() { return probeSeen; },
-          set probeSeen(value) { probeSeen = !!value; }
-        },
-        {
-          inject: injectAsync,
-          pump: pumpProbe
+      backend.setHandler(onKey);
+    } catch (err) {
+      return {
+        ok: false,
+        code: 'hook-exception',
+        detail: describeHookException(err)
+      };
+    }
+    const attempts = [];
+    try {
+      for (let i = 0; i < HMOD_ORDER.length; i += 1) {
+        const kind = HMOD_ORDER[i];
+        const started = await Promise.resolve(backend.start(kind));
+        const row = Object.assign({ hMod: kind, ok: false }, started || {});
+        if (!row.ok) {
+          attempts.push(row);
+          await Promise.resolve(backend.stop());
+          continue;
         }
-      );
-    } finally {
-      probing = false;
-    }
-  }
+        const probed = Object.assign(emptyProbe(), await Promise.resolve(backend.probe()));
+        const full = Object.assign({}, row, probed, { hMod: row.hMod || kind });
+        attempts.push(full);
+        if (full.proven) {
+          installed = true;
+          session.markLive();
+          const diag = makeDiag(full, attempts, backend);
+          note(diag);
+          return { ok: true, awaitingRealKey: false, diag: diag, diagLine: formatDiag(diag) };
+        }
+        await Promise.resolve(backend.stop());
+      }
 
-  function install() {
-    try {
-      uninstall();
-      const kernel32 = loadApi();
-      const GetModuleHandleW = kernel32.func('void * __stdcall GetModuleHandleW(void *lpModuleName)');
-      const hMod = GetModuleHandleW(null);
-      let set = trySetHook(hMod);
-      if (!set.handle) set = trySetHook(null);
-      if (!set.handle) {
+      let kept = null;
+      for (let i = 0; i < HMOD_ORDER.length; i += 1) {
+        const kind = HMOD_ORDER[i];
+        const started = await Promise.resolve(backend.start(kind));
+        const row = Object.assign({ hMod: kind, ok: false }, started || {});
+        if (row.ok) {
+          kept = row;
+          break;
+        }
+        attempts.push(row);
+        await Promise.resolve(backend.stop());
+      }
+      if (!kept) {
+        const err = attempts[attempts.length - 1] || { ok: false, hMod: 'none' };
+        const diag = makeDiag(err, attempts, backend);
+        note(diag);
+        installed = false;
         return {
           ok: false,
-          code: 'set-hook-failed',
-          detail: describeWin32HookFailure(set.error)
+          code: err.code || 'set-hook-failed',
+          detail: rowDetail(err) + '\n' + formatDiag(diag),
+          diag: diag,
+          diagLine: formatDiag(diag)
         };
       }
-      hHook = set.handle;
-      const probed = probe();
-      if (!probed.ok) {
-        uninstall();
-        return probed;
-      }
-      active = true;
-      return { ok: true };
+      installed = true;
+      session.markAwaiting();
+      const previous = attempts[attempts.length - 1] || {};
+      const diag = makeDiag(Object.assign({}, previous, kept, {
+        hMod: kept.hMod,
+        proven: false
+      }), attempts, backend);
+      note(diag);
+      return { ok: true, awaitingRealKey: true, diag: diag, diagLine: formatDiag(diag) };
     } catch (err) {
-      uninstall();
+      try { await Promise.resolve(backend.stop()); } catch (ignore) { /* already down */ }
+      installed = false;
+      session.reset();
       return {
         ok: false,
         code: 'hook-exception',
@@ -225,17 +282,59 @@ function createWinHook(options) {
     }
   }
 
+  function uninstall() {
+    installed = false;
+    session.reset();
+    try { backend.stop(); } catch (err) { /* already down */ }
+  }
+
+  function mergedDiag() {
+    let live = null;
+    try { live = backend.stats ? backend.stats() : null; } catch (err) { live = null; }
+    if (!live) return lastDiag;
+    return Object.assign({}, lastDiag || {}, {
+      procEntered: live.procEntered,
+      probeSeen: live.probeSeen,
+      lastVk: live.lastVk,
+      lastFlags: live.lastFlags,
+      lastExtra: live.lastExtra,
+      pump: live.pump || (lastDiag && lastDiag.pump) || ''
+    });
+  }
+
+  function giveUp() {
+    const diag = mergedDiag();
+    uninstall();
+    return {
+      ok: false,
+      code: 'probe-not-sync',
+      detail: PROBE_NOT_SYNC_DETAIL + (diag ? '\n' + formatDiag(diag) : ''),
+      diag: diag,
+      diagLine: diag ? formatDiag(diag) : ''
+    };
+  }
+
   return {
     install: install,
-    probe: probe,
     uninstall: uninstall,
-    isActive() { return active && !!hHook; }
+    giveUp: giveUp,
+    armLock() { return session.armLock(); },
+    isActive() { return installed && session.isLive(); },
+    isAwaitingProof() { return installed && session.isAwaiting(); },
+    isInstalled() { return installed; },
+    isAlive() { return installed && backend.isAlive(); },
+    setLocked(locked) {
+      try { backend.setLocked(!!locked); } catch (err) { /* best effort */ }
+    }
   };
 }
 
 module.exports = {
   createWinHook,
-  createApiLoader,
+  loadNativeAddon,
   WH_KEYBOARD_LL,
-  KBDLLHOOKSTRUCT
+  HMOD_ORDER,
+  get KBDLLHOOKSTRUCT() {
+    return require('./hook-koffi').KBDLLHOOKSTRUCT;
+  }
 };

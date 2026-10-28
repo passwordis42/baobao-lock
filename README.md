@@ -1,17 +1,17 @@
 <h1 align="center">宝宝锁</h1>
 
 <p align="center">
-  <a href="https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.2"><img alt="platform Windows" src="https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" /></a>
+  <a href="https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.3"><img alt="platform Windows" src="https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" /></a>
   &nbsp;
   <a href="https://www.electronjs.org/"><img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron&logoColor=white" /></a>
   &nbsp;
-  <a href="https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.2"><img alt="release v0.1.2" src="https://img.shields.io/badge/release-v0.1.2-FF6B95?style=flat-square" /></a>
+  <a href="https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.3"><img alt="release v0.1.3" src="https://img.shields.io/badge/release-v0.1.3-FF6B95?style=flat-square" /></a>
   &nbsp;
   <a href="#许可与隐私"><img alt="license TBD / unlicensed" src="https://img.shields.io/badge/license-TBD%20%2F%20unlicensed-lightgrey?style=flat-square" /></a>
 </p>
 
 <p align="center">开会或直播时锁住键盘，免得小孩乱按。鼠标和触控板照常使用。<br />
-<sub>界面简体中文 · 当前发布 v0.1.2 · 仅 Windows</sub></p>
+<sub>界面简体中文 · 当前发布 v0.1.3 · 仅 Windows</sub></p>
 
 <p align="center">
   <img src="docs/design/v0/widget-locked.png" width="480" alt="已上锁挂件：右下角的锁宝，徽章「已上锁」，提示按 Ctrl+Alt+L 解锁" />
@@ -40,15 +40,15 @@
 ## 下载
 
 <p align="center">
-  <a href="https://github.com/passwordis42/baobao-lock/releases/download/v0.1.2/Baobao-Lock-Setup-0.1.2.exe"><img alt="Download v0.1.2 for Windows x64" src="https://img.shields.io/badge/Download%20v0.1.2-Windows%20x64-FF6B95?style=for-the-badge&logo=windows&logoColor=white" /></a>
+  <a href="https://github.com/passwordis42/baobao-lock/releases/download/v0.1.3/Baobao-Lock-Setup-0.1.3.exe"><img alt="Download v0.1.3 for Windows x64" src="https://img.shields.io/badge/Download%20v0.1.3-Windows%20x64-FF6B95?style=for-the-badge&logo=windows&logoColor=white" /></a>
 </p>
 
 只提供 **Windows 10 / 11 的 64 位**安装包。没有 32 位，也没有 macOS。
 
 | | |
 | --- | --- |
-| 安装包 | [**Baobao-Lock-Setup-0.1.2.exe**](https://github.com/passwordis42/baobao-lock/releases/download/v0.1.2/Baobao-Lock-Setup-0.1.2.exe) |
-| 本版说明 | [v0.1.2](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.2) · 2026-10-28 · 修复 v0.1.1 的 `probe-not-sync` |
+| 安装包 | [**Baobao-Lock-Setup-0.1.3.exe**](https://github.com/passwordis42/baobao-lock/releases/download/v0.1.3/Baobao-Lock-Setup-0.1.3.exe) |
+| 本版说明 | [v0.1.3](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.3) · 2026-10-28 · 0.1.2 的 `probe-not-sync` 在真机上仍在，这一版改独立线程 |
 | 以后的版本 | [Releases](https://github.com/passwordis42/baobao-lock/releases) · `Baobao-Lock-Setup-x.y.z.exe` |
 
 未签名。SmartScreen 可能提示「未知发布者」，这不表示锁已经生效。默认不用管理员，安装到当前用户目录。打开后只有托盘图标，**不会上锁**，也不会写入开机启动项。
@@ -72,15 +72,17 @@
 
 ## 已知问题
 
-状态日期 2026-10-28。最新 Release **[v0.1.2](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.2)**。
+状态日期 2026-10-28。最新 Release **[v0.1.3](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.3)**。
 
-**当前开放：** 无。
+**当前开放：**
+
+- **待真机回测**（v0.1.3）。医生的 Windows 10 还没装过这一版。若仍然锁不上，对话框详情里会有 `procEntered`、`lastFlags`、`lastExtra`、`backend`，托盘在确认前是「请按任意键确认」，不会写成已上锁。日志在 `%APPDATA%\BaobaoLock\baobao.log`。
 
 **已修复**
 
 | ID | 版本 | 说明 |
 | --- | --- | --- |
-| `probe-not-sync` | v0.1.1 → **v0.1.2** | 安装线程泵消息，并由 worker 注入探测键。 |
+| `probe-not-sync` | v0.1.1 起，v0.1.2 未修好 → **v0.1.3** | 0.1.2 在主线程里用 koffi 同步泵 `PeekMessage`，低级钩子回调到不了 JS，自检失败就把钩子卸了。0.1.3 改到独立线程的 `GetMessage` 循环，探测用另一条线程的 `SendInput`；合成键进不了回调时改等第一次真实按键，确认前不进入已上锁。 |
 | `loadApi` 第二次返回 `undefined` | v0.1.0 → **v0.1.1** | 再次安装钩子时 `kernel32` 被弄丢，详情变成 `Cannot read properties of undefined (reading 'func')`。0.1.1 改为缓存已加载的 `user32` / `kernel32` 再返回。 |
 
 <details>
@@ -151,9 +153,9 @@
 
 ## 怎么实现
 
-界面是 Electron。主进程用 [koffi](https://koffi.dev/) 调用 `SetWindowsHookExW(WH_KEYBOARD_LL)` 拦键盘，不挂鼠标钩子。
+界面是 Electron。键盘钩子是 `SetWindowsHookExW(WH_KEYBOARD_LL)`，装在独立原生线程上，由那条线程自己 `GetMessage` / `DispatchMessage`。不挂鼠标钩子。koffi 只在这个原生模块没载入时作后备。
 
-钩子必须在这一下按键送出之前决定吞不吞。低级钩子只在安装它的线程正在泵消息时才会被调用。每次安装都由 worker 注入一个打不出字的探测键（F23），安装线程泵到回调看见它，才算装上。看不到就卸掉钩子，并弹出「键盘钩子未生效 / 键盘现在没有锁住」。0.1.1 在同一线程里同步探测，回调来不及跑（`probe-not-sync`），已在 0.1.2 修好，见 [已知问题](#已知问题)。
+钩子必须在这一下按键送出之前决定吞不吞。低级钩子只在安装它的线程正在泵消息时才会被调用。0.1.2 在 Electron 主线程里用 koffi 同步泵消息，回调进不了 JS，自检失败就把钩子卸掉，所以真机上锁从来没机会生效。0.1.3 用另一条线程 `SendInput` 一个打不出字的探测键（VK `0xE8`），在原生回调里认。认不到就留着钩子，等第一次真实按键；这一下被拦住才进入已上锁。真实按键也进不了回调，才弹出「键盘钩子未生效 / 键盘现在没有锁住」。见 [已知问题](#已知问题)。
 
 清单是 `asInvoker`：默认不用管理员，安装到当前用户目录。失败时可以再试一次「以管理员身份运行」，但失败不会画成已上锁。和专注守卫没有联动，也不读它的状态。
 
@@ -195,26 +197,26 @@ Baobao Lock (宝宝锁) is a small Windows tool for meetings and live streams. I
 | Out of scope | No mouse/trackpad lock, no fullscreen cover, no parental password, no macOS or phone build, no login item, no `Ctrl+Alt+Del` block. |
 | Honest failure | If the hook is not actually swallowing keys, the app says so and does not show a locked state. |
 
-Current release: **v0.1.2**. No open issues. `probe-not-sync` (v0.1.1) was fixed in v0.1.2: the installing thread pumps messages, and a worker injects the probe key. `loadApi` returning `undefined` on a second install (`reading 'func'`) was fixed in v0.1.1 by caching `user32` / `kernel32`.
+Current release: **v0.1.3**. Real-machine retest on the doctor's Windows 10 is still open. `probe-not-sync` started in v0.1.1 and was still present in v0.1.2: koffi's synchronous `PeekMessage` pump never ran the hook callback, so install removed the hook. v0.1.3 puts the hook on its own thread with `GetMessage`, injects the probe with `SendInput` from another thread, and if that synthetic key is not seen, waits for the first real key before showing a lock. `loadApi` returning `undefined` on a second install (`reading 'func'`) was fixed in v0.1.1 by caching `user32` / `kernel32`.
 
-Download (Windows 10/11 x64, unsigned): [Baobao-Lock-Setup-0.1.2.exe](https://github.com/passwordis42/baobao-lock/releases/download/v0.1.2/Baobao-Lock-Setup-0.1.2.exe) · [v0.1.2 notes](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.2) · [all releases](https://github.com/passwordis42/baobao-lock/releases). SmartScreen may warn about an unknown publisher. Per-user install; opens to the tray and does not lock on launch.
+Download (Windows 10/11 x64, unsigned): [Baobao-Lock-Setup-0.1.3.exe](https://github.com/passwordis42/baobao-lock/releases/download/v0.1.3/Baobao-Lock-Setup-0.1.3.exe) · [v0.1.3 notes](https://github.com/passwordis42/baobao-lock/releases/tag/v0.1.3) · [all releases](https://github.com/passwordis42/baobao-lock/releases). SmartScreen may warn about an unknown publisher. Per-user install; opens to the tray and does not lock on launch.
 
 Tray: mint when unlocked, pink when locked. Wrong unlock chord shows 「哎呀，还锁着哦」 without stealing focus.
 
-Electron UI. The main process installs a low-level keyboard hook with koffi and `SetWindowsHookExW(WH_KEYBOARD_LL)`. The installing thread pumps messages while a worker injects an F23 probe. Manifest is `asInvoker`. Not linked to Focus Guard. Depth: [docs/BUILD.md](docs/BUILD.md), [docs/PRD.md](docs/PRD.md).
+Electron UI. A native thread installs `SetWindowsHookExW(WH_KEYBOARD_LL)` and runs `GetMessage`. Another thread injects a non-typing probe with `SendInput`. Manifest is `asInvoker`. Not linked to Focus Guard. Depth: [docs/BUILD.md](docs/BUILD.md), [docs/PRD.md](docs/PRD.md).
 
 </details>
 
 <details>
 <summary>繁體中文</summary>
 
-開會或直播時只鎖鍵盤，避免小孩亂按；滑鼠與觸控板仍可用。畫面文字是簡體中文。目前發布是 **v0.1.2**。v0.1.1 的 `probe-not-sync` 已修好，見 [已知問題](#已知问题)。
+開會或直播時只鎖鍵盤，避免小孩亂按；滑鼠與觸控板仍可用。畫面文字是簡體中文。目前發布是 **v0.1.3**。v0.1.2 的 `probe-not-sync` 在真機上仍在，這一版改為獨立執行緒，見 [已知問題](#已知问题)。
 
 </details>
 
 <details>
 <summary>日本語</summary>
 
-会議や配信のあいだ、キーボードだけをロックして、子どもの誤操作を防ぎます。マウスとトラックパッドはそのまま使えます。画面の文言は簡体字中国語です。現在のリリースは **v0.1.2** です。v0.1.1 の `probe-not-sync` は修正済みです。[既知の問題](#已知问题) を参照してください。
+会議や配信のあいだ、キーボードだけをロックして、子どもの誤操作を防ぎます。マウスとトラックパッドはそのまま使えます。画面の文言は簡体字中国語です。現在のリリースは **v0.1.3** です。v0.1.2 の `probe-not-sync` は実機では直っておらず、この版は専用スレッドに移しました。[既知の問題](#已知问题) を参照してください。
 
 </details>

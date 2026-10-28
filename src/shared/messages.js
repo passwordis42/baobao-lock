@@ -35,6 +35,9 @@ function hookFailureMessage(result) {
 }
 
 function trayStatus(state) {
+  if (state && state.hookAwaiting && !state.hookActive) {
+    return { text: '请按任意键确认', kind: 'hook-off' };
+  }
   if (!state || !state.hookActive) {
     return { text: '钩子未生效', kind: 'hook-off' };
   }
